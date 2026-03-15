@@ -1,37 +1,60 @@
+import { useSubscription } from "@/contexts/SubscriptionContext";
 import { wasteBins, analyticsData, driverTasks, getBinStatus } from "@/data/mockData";
 import { StatCard } from "./StatCard";
 import { BinStatusBadge } from "./BinStatusBadge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trash2, Recycle, Leaf, AlertTriangle, TruckIcon, MapPin } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Trash2, Recycle, Leaf, AlertTriangle, MapPin, Lock, ArrowUpRight } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
+import { useNavigate } from "react-router-dom";
 
 export function DashboardOverview() {
+  const { subscription, features } = useSubscription();
+  const navigate = useNavigate();
   const criticalBins = wasteBins.filter((b) => getBinStatus(b.fillLevel) === "red");
   const pendingTasks = driverTasks.filter((t) => !t.completed);
+  const isBasic = subscription.plan_type === "basic";
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-foreground">Dashboard</h2>
-        <p className="text-sm text-muted-foreground">
-          Overview of city waste management — {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-foreground">Dashboard</h2>
+          <p className="text-sm text-muted-foreground">
+            Overview of city waste management — {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+          </p>
+        </div>
+        <Badge variant="outline" className="text-xs capitalize">{subscription.plan_type} Plan</Badge>
       </div>
 
       {/* Stats grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard title="Total Collected" value={`${analyticsData.totalTonnage}t`} subtitle="This month" icon={Trash2} trend={{ value: 8.2, label: "vs last month" }} />
         <StatCard title="Recycling Rate" value={`${analyticsData.recyclingRate}%`} subtitle={`Goal: ${analyticsData.recyclingGoal}%`} icon={Recycle} variant="primary" trend={{ value: 3.1, label: "improvement" }} />
-        <StatCard title="CO₂ Saved" value={`${analyticsData.co2Saved}t`} subtitle="Route optimization" icon={Leaf} variant="success" trend={{ value: 12.4, label: "vs baseline" }} />
+        {features.co2Reports ? (
+          <StatCard title="CO₂ Saved" value={`${analyticsData.co2Saved}t`} subtitle="Route optimization" icon={Leaf} variant="success" trend={{ value: 12.4, label: "vs baseline" }} />
+        ) : (
+          <Card className="border-dashed border-muted-foreground/20 flex items-center justify-center">
+            <CardContent className="p-5 text-center">
+              <Lock className="mx-auto h-5 w-5 text-muted-foreground/40 mb-1" />
+              <p className="text-xs text-muted-foreground">CO₂ Reports</p>
+              <Button variant="link" size="sm" className="text-xs p-0 h-auto mt-1" onClick={() => navigate("/pricing")}>
+                Upgrade <ArrowUpRight className="ml-1 h-3 w-3" />
+              </Button>
+            </CardContent>
+          </Card>
+        )}
         <StatCard title="Critical Bins" value={criticalBins.length} subtitle="Need immediate pickup" icon={AlertTriangle} variant={criticalBins.length > 3 ? "destructive" : "warning"} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        {/* Mini chart */}
+        {/* Mini chart - visible to all but with limited data for basic */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
               This Week's Collection
+              {isBasic && <Badge variant="secondary" className="ml-2 text-[9px]">Basic View</Badge>}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -48,6 +71,7 @@ export function DashboardOverview() {
                   }}
                 />
                 <Bar dataKey="tonnage" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                {!isBasic && <Bar dataKey="recycling" fill="hsl(var(--success))" radius={[4, 4, 0, 0]} />}
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -62,7 +86,7 @@ export function DashboardOverview() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {criticalBins.map((bin) => (
+            {criticalBins.slice(0, isBasic ? 2 : undefined).map((bin) => (
               <div key={bin.id} className="flex items-center justify-between rounded-lg border bg-muted/20 p-2.5">
                 <div>
                   <p className="text-xs font-medium text-foreground">{bin.location}</p>
@@ -74,6 +98,11 @@ export function DashboardOverview() {
                 <BinStatusBadge fillLevel={bin.fillLevel} size="sm" />
               </div>
             ))}
+            {isBasic && criticalBins.length > 2 && (
+              <Button variant="ghost" size="sm" className="w-full text-xs text-muted-foreground" onClick={() => navigate("/pricing")}>
+                +{criticalBins.length - 2} more — Upgrade to view all
+              </Button>
+            )}
           </CardContent>
         </Card>
       </div>
