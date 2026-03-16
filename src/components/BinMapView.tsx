@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
-import { MapContainer, TileLayer, CircleMarker, Popup, Polyline, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, CircleMarker, Popup, Polyline, Marker, Tooltip, useMap } from "react-leaflet";
+import L from "leaflet";
 import { wasteBins, getBinStatus, getBinStatusLabel } from "@/data/mockData";
 import { BinStatusBadge } from "./BinStatusBadge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +12,15 @@ const STATUS_COLORS = {
   yellow: "#eab308",
   red: "#ef4444",
 };
+
+function createNumberIcon(n: number) {
+  return L.divIcon({
+    className: "",
+    html: `<div style="background:#ef4444;color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)">${n}</div>`,
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+  });
+}
 
 // Center of Jos, Plateau State
 const JOS_CENTER: [number, number] = [9.8965, 8.8583];
@@ -28,12 +38,13 @@ function FitBounds() {
 }
 
 // Nearest-neighbor greedy route for critical bins
-function optimizeRoute(bins: typeof wasteBins): [number, number][] {
+import type { WasteBin } from "@/data/mockData";
+function optimizeRoute(bins: WasteBin[]): WasteBin[] {
   if (bins.length === 0) return [];
   const remaining = [...bins];
-  const route: [number, number][] = [];
+  const ordered: WasteBin[] = [];
   let current = remaining.splice(0, 1)[0];
-  route.push([current.lat, current.lng]);
+  ordered.push(current);
   while (remaining.length > 0) {
     let nearestIdx = 0;
     let nearestDist = Infinity;
@@ -42,9 +53,9 @@ function optimizeRoute(bins: typeof wasteBins): [number, number][] {
       if (d < nearestDist) { nearestDist = d; nearestIdx = i; }
     }
     current = remaining.splice(nearestIdx, 1)[0];
-    route.push([current.lat, current.lng]);
+    ordered.push(current);
   }
-  return route;
+  return ordered;
 }
 
 export function BinMapView() {
@@ -54,10 +65,11 @@ export function BinMapView() {
     red: "bg-destructive",
   };
 
-  const criticalRoute = useMemo(
+  const criticalBins = useMemo(
     () => optimizeRoute(wasteBins.filter((b) => getBinStatus(b.fillLevel) === "red")),
     []
   );
+  const criticalRoute: [number, number][] = criticalBins.map((b) => [b.lat, b.lng]);
 
   return (
     <div className="space-y-6">
@@ -95,6 +107,13 @@ export function BinMapView() {
                 }}
               />
             )}
+            {criticalBins.map((bin, i) => (
+              <Marker key={`step-${bin.id}`} position={[bin.lat, bin.lng]} icon={createNumberIcon(i + 1)}>
+                <Tooltip direction="top" offset={[0, -14]} permanent={false}>
+                  <span className="text-xs font-semibold">Stop {i + 1}: {bin.location}</span>
+                </Tooltip>
+              </Marker>
+            ))}
             {wasteBins.map((bin) => {
               const status = getBinStatus(bin.fillLevel);
               return (
