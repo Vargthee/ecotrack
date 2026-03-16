@@ -37,8 +37,8 @@ export function BinMapView() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-foreground">Bin Map — Plateau State</h2>
-        <p className="text-sm text-muted-foreground">Real-time waste bin locations across Jos and surrounding LGAs</p>
+        <h2 className="text-2xl font-bold text-foreground">Bin Map — Jos, Plateau State</h2>
+        <p className="text-sm text-muted-foreground">Real-time waste bin locations across Jos and Bukuru</p>
       </div>
 
       <DynamicCollectionAlerts />
