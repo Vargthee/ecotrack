@@ -84,6 +84,17 @@ export function BinMapView() {
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
             <FitBounds />
+            {criticalRoute.length > 1 && (
+              <Polyline
+                positions={criticalRoute}
+                pathOptions={{
+                  color: "hsl(var(--destructive))",
+                  weight: 3,
+                  dashArray: "8, 6",
+                  opacity: 0.85,
+                }}
+              />
+            )}
             {wasteBins.map((bin) => {
               const status = getBinStatus(bin.fillLevel);
               return (
