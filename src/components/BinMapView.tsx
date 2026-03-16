@@ -13,6 +13,15 @@ const STATUS_COLORS = {
   red: "#ef4444",
 };
 
+function createNumberIcon(n: number) {
+  return L.divIcon({
+    className: "",
+    html: `<div style="background:#ef4444;color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)">${n}</div>`,
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+  });
+}
+
 // Center of Jos, Plateau State
 const JOS_CENTER: [number, number] = [9.8965, 8.8583];
 const JOS_BOUNDS: [[number, number], [number, number]] = [
