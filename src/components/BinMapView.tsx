@@ -38,12 +38,13 @@ function FitBounds() {
 }
 
 // Nearest-neighbor greedy route for critical bins
-function optimizeRoute(bins: typeof wasteBins): [number, number][] {
+import type { WasteBin } from "@/data/mockData";
+function optimizeRoute(bins: WasteBin[]): WasteBin[] {
   if (bins.length === 0) return [];
   const remaining = [...bins];
-  const route: [number, number][] = [];
+  const ordered: WasteBin[] = [];
   let current = remaining.splice(0, 1)[0];
-  route.push([current.lat, current.lng]);
+  ordered.push(current);
   while (remaining.length > 0) {
     let nearestIdx = 0;
     let nearestDist = Infinity;
@@ -52,9 +53,9 @@ function optimizeRoute(bins: typeof wasteBins): [number, number][] {
       if (d < nearestDist) { nearestDist = d; nearestIdx = i; }
     }
     current = remaining.splice(nearestIdx, 1)[0];
-    route.push([current.lat, current.lng]);
+    ordered.push(current);
   }
-  return route;
+  return ordered;
 }
 
 export function BinMapView() {
@@ -64,10 +65,11 @@ export function BinMapView() {
     red: "bg-destructive",
   };
 
-  const criticalRoute = useMemo(
+  const criticalBins = useMemo(
     () => optimizeRoute(wasteBins.filter((b) => getBinStatus(b.fillLevel) === "red")),
     []
   );
+  const criticalRoute: [number, number][] = criticalBins.map((b) => [b.lat, b.lng]);
 
   return (
     <div className="space-y-6">
