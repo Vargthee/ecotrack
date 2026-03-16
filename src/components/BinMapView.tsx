@@ -107,6 +107,13 @@ export function BinMapView() {
                 }}
               />
             )}
+            {criticalBins.map((bin, i) => (
+              <Marker key={`step-${bin.id}`} position={[bin.lat, bin.lng]} icon={createNumberIcon(i + 1)}>
+                <Tooltip direction="top" offset={[0, -14]} permanent={false}>
+                  <span className="text-xs font-semibold">Stop {i + 1}: {bin.location}</span>
+                </Tooltip>
+              </Marker>
+            ))}
             {wasteBins.map((bin) => {
               const status = getBinStatus(bin.fillLevel);
               return (
