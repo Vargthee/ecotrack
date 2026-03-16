@@ -47,10 +47,12 @@ export function BinMapView() {
       <Card className="overflow-hidden">
         <div className="h-[500px] w-full">
           <MapContainer
-            center={PLATEAU_CENTER}
-            zoom={9}
+            center={JOS_CENTER}
+            zoom={13}
             className="h-full w-full z-0"
             scrollWheelZoom={true}
+            maxBounds={JOS_BOUNDS}
+            minZoom={11}
           >
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
