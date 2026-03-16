@@ -1,15 +1,30 @@
+import { useEffect } from "react";
+import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from "react-leaflet";
 import { wasteBins, getBinStatus, getBinStatusLabel } from "@/data/mockData";
 import { BinStatusBadge } from "./BinStatusBadge";
-import { MapPin, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DynamicCollectionAlerts } from "./DynamicCollectionAlerts";
+import "leaflet/dist/leaflet.css";
+
+const STATUS_COLORS = {
+  green: "#22c55e",
+  yellow: "#eab308",
+  red: "#ef4444",
+};
+
+// Center of Plateau State, Nigeria (Jos area)
+const PLATEAU_CENTER: [number, number] = [9.6, 9.0];
+
+function FitBounds() {
+  const map = useMap();
+  useEffect(() => {
+    const bounds = wasteBins.map((b) => [b.lat, b.lng] as [number, number]);
+    if (bounds.length) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
+  }, [map]);
+  return null;
+}
 
 export function BinMapView() {
-  const statusColors = {
-    green: "border-success bg-success/10",
-    yellow: "border-warning bg-warning/10",
-    red: "border-destructive bg-destructive/10",
-  };
-
   const dotColors = {
     green: "bg-success",
     yellow: "bg-warning",
@@ -19,63 +34,53 @@ export function BinMapView() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-foreground">Bin Map</h2>
-        <p className="text-sm text-muted-foreground">Real-time waste bin locations and fill levels</p>
+        <h2 className="text-2xl font-bold text-foreground">Bin Map — Plateau State</h2>
+        <p className="text-sm text-muted-foreground">Real-time waste bin locations across Jos and surrounding LGAs</p>
       </div>
 
-      {/* Map placeholder with bin visualization */}
+      <DynamicCollectionAlerts />
+
+      {/* Leaflet Map */}
       <Card className="overflow-hidden">
-        <div className="relative h-[450px] bg-muted/30">
-          {/* Grid-based map visualization */}
-          <div className="absolute inset-0 p-6">
-            <div className="relative h-full w-full rounded-lg border border-dashed border-border bg-background/50">
-              {/* Grid lines */}
-              <svg className="absolute inset-0 h-full w-full" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                  <pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse">
-                    <path d="M 60 0 L 0 0 0 60" fill="none" stroke="hsl(var(--border))" strokeWidth="0.5" />
-                  </pattern>
-                </defs>
-                <rect width="100%" height="100%" fill="url(#grid)" />
-              </svg>
-
-              {/* Bin markers positioned on the map */}
-              {wasteBins.map((bin, i) => {
-                const status = getBinStatus(bin.fillLevel);
-                const x = 8 + ((i % 5) * 20);
-                const y = 15 + (Math.floor(i / 5) * 45);
-                return (
-                  <div
-                    key={bin.id}
-                    className="absolute group cursor-pointer"
-                    style={{ left: `${x}%`, top: `${y}%`, transform: "translate(-50%, -50%)" }}
-                  >
-                    <div className={`relative flex h-10 w-10 items-center justify-center rounded-full border-2 ${statusColors[status]} transition-transform group-hover:scale-125`}>
-                      <Trash2 className="h-4 w-4 text-foreground" />
-                      {status === "red" && (
-                        <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-destructive animate-pulse-slow" />
-                      )}
+        <div className="h-[500px] w-full">
+          <MapContainer
+            center={PLATEAU_CENTER}
+            zoom={9}
+            className="h-full w-full z-0"
+            scrollWheelZoom={true}
+          >
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            <FitBounds />
+            {wasteBins.map((bin) => {
+              const status = getBinStatus(bin.fillLevel);
+              return (
+                <CircleMarker
+                  key={bin.id}
+                  center={[bin.lat, bin.lng]}
+                  radius={status === "red" ? 12 : 9}
+                  pathOptions={{
+                    color: STATUS_COLORS[status],
+                    fillColor: STATUS_COLORS[status],
+                    fillOpacity: 0.7,
+                    weight: 2,
+                  }}
+                >
+                  <Popup>
+                    <div className="text-xs space-y-1 min-w-[150px]">
+                      <p className="font-bold text-sm">{bin.id}</p>
+                      <p className="text-muted-foreground">{bin.location}</p>
+                      <p>Fill Level: <strong>{bin.fillLevel}%</strong> — {getBinStatusLabel(bin.fillLevel)}</p>
+                      <p>Type: <span className="capitalize">{bin.type}</span></p>
+                      <p>Last Collected: {bin.lastCollected}</p>
                     </div>
-                    {/* Tooltip */}
-                    <div className="absolute left-1/2 -translate-x-1/2 top-12 z-10 hidden group-hover:block">
-                      <div className="rounded-lg border bg-card p-2.5 shadow-lg text-xs whitespace-nowrap">
-                        <p className="font-semibold text-card-foreground">{bin.id}</p>
-                        <p className="text-muted-foreground">{bin.location}</p>
-                        <div className="mt-1">
-                          <BinStatusBadge fillLevel={bin.fillLevel} size="sm" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-
-              <div className="absolute bottom-3 left-3 text-[10px] text-muted-foreground font-mono">
-                <MapPin className="inline h-3 w-3 mr-1" />
-                Downtown District — 10 bins monitored
-              </div>
-            </div>
-          </div>
+                  </Popup>
+                </CircleMarker>
+              );
+            })}
+          </MapContainer>
         </div>
       </Card>
 
