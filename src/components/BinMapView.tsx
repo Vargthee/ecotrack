@@ -12,14 +12,17 @@ const STATUS_COLORS = {
   red: "#ef4444",
 };
 
-// Center of Plateau State, Nigeria (Jos area)
-const PLATEAU_CENTER: [number, number] = [9.6, 9.0];
+// Center of Jos, Plateau State
+const JOS_CENTER: [number, number] = [9.8965, 8.8583];
+const JOS_BOUNDS: [[number, number], [number, number]] = [
+  [9.75, 8.80],
+  [9.97, 8.95],
+];
 
 function FitBounds() {
   const map = useMap();
   useEffect(() => {
-    const bounds = wasteBins.map((b) => [b.lat, b.lng] as [number, number]);
-    if (bounds.length) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
+    map.fitBounds(JOS_BOUNDS, { padding: [30, 30] });
   }, [map]);
   return null;
 }
