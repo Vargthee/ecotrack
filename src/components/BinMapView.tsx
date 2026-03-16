@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from "react-leaflet";
+import { useEffect, useMemo } from "react";
+import { MapContainer, TileLayer, CircleMarker, Popup, Polyline, useMap } from "react-leaflet";
 import { wasteBins, getBinStatus, getBinStatusLabel } from "@/data/mockData";
 import { BinStatusBadge } from "./BinStatusBadge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
