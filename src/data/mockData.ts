@@ -32,14 +32,14 @@ export interface CitizenReport {
 export const wasteBins: WasteBin[] = [
   { id: "BIN-001", location: "Terminus Market, Jos", lat: 9.9167, lng: 8.8903, fillLevel: 85, lastCollected: "2026-03-14", type: "general" },
   { id: "BIN-002", location: "University of Jos Gate", lat: 9.9400, lng: 8.8800, fillLevel: 42, lastCollected: "2026-03-14", type: "recycling" },
-  { id: "BIN-003", location: "Jos City Hall", lat: 9.9220, lng: 8.8950, fillLevel: 91, lastCollected: "2026-03-13", type: "general" },
+  { id: "BIN-003", location: "Jos Main Market", lat: 9.9220, lng: 8.8950, fillLevel: 91, lastCollected: "2026-03-13", type: "general" },
   { id: "BIN-004", location: "Bukuru Roundabout", lat: 9.7940, lng: 8.8680, fillLevel: 67, lastCollected: "2026-03-14", type: "organic" },
-  { id: "BIN-005", location: "Pankshin Central", lat: 9.3260, lng: 9.4350, fillLevel: 23, lastCollected: "2026-03-15", type: "recycling" },
+  { id: "BIN-005", location: "Farin Gada, Jos", lat: 9.9050, lng: 8.9050, fillLevel: 23, lastCollected: "2026-03-15", type: "recycling" },
   { id: "BIN-006", location: "Angwan Rogo, Jos", lat: 9.8900, lng: 8.8600, fillLevel: 95, lastCollected: "2026-03-12", type: "general" },
-  { id: "BIN-007", location: "Hill Station Junction", lat: 9.9300, lng: 8.9100, fillLevel: 55, lastCollected: "2026-03-14", type: "recycling" },
-  { id: "BIN-008", location: "Bauchi Road, Jos", lat: 9.9050, lng: 8.9200, fillLevel: 78, lastCollected: "2026-03-13", type: "general" },
-  { id: "BIN-009", location: "Shendam Town Center", lat: 8.7550, lng: 9.5400, fillLevel: 12, lastCollected: "2026-03-15", type: "organic" },
-  { id: "BIN-010", location: "Plateau Specialist Hospital", lat: 9.9100, lng: 8.8750, fillLevel: 88, lastCollected: "2026-03-12", type: "general" },
+  { id: "BIN-007", location: "Hill Station Junction, Jos", lat: 9.9300, lng: 8.9100, fillLevel: 55, lastCollected: "2026-03-14", type: "recycling" },
+  { id: "BIN-008", location: "Bauchi Road, Jos", lat: 9.9350, lng: 8.9200, fillLevel: 78, lastCollected: "2026-03-13", type: "general" },
+  { id: "BIN-009", location: "Hwolshe, Jos South", lat: 9.8200, lng: 8.8400, fillLevel: 12, lastCollected: "2026-03-15", type: "organic" },
+  { id: "BIN-010", location: "Plateau Specialist Hospital, Jos", lat: 9.9100, lng: 8.8750, fillLevel: 88, lastCollected: "2026-03-12", type: "general" },
 ];
 
 export const driverTasks: DriverTask[] = wasteBins

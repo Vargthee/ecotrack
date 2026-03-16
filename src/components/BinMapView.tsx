@@ -12,14 +12,17 @@ const STATUS_COLORS = {
   red: "#ef4444",
 };
 
-// Center of Plateau State, Nigeria (Jos area)
-const PLATEAU_CENTER: [number, number] = [9.6, 9.0];
+// Center of Jos, Plateau State
+const JOS_CENTER: [number, number] = [9.8965, 8.8583];
+const JOS_BOUNDS: [[number, number], [number, number]] = [
+  [9.75, 8.80],
+  [9.97, 8.95],
+];
 
 function FitBounds() {
   const map = useMap();
   useEffect(() => {
-    const bounds = wasteBins.map((b) => [b.lat, b.lng] as [number, number]);
-    if (bounds.length) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
+    map.fitBounds(JOS_BOUNDS, { padding: [30, 30] });
   }, [map]);
   return null;
 }
@@ -34,8 +37,8 @@ export function BinMapView() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-foreground">Bin Map — Plateau State</h2>
-        <p className="text-sm text-muted-foreground">Real-time waste bin locations across Jos and surrounding LGAs</p>
+        <h2 className="text-2xl font-bold text-foreground">Bin Map — Jos, Plateau State</h2>
+        <p className="text-sm text-muted-foreground">Real-time waste bin locations across Jos and Bukuru</p>
       </div>
 
       <DynamicCollectionAlerts />
@@ -44,10 +47,12 @@ export function BinMapView() {
       <Card className="overflow-hidden">
         <div className="h-[500px] w-full">
           <MapContainer
-            center={PLATEAU_CENTER}
-            zoom={9}
+            center={JOS_CENTER}
+            zoom={13}
             className="h-full w-full z-0"
             scrollWheelZoom={true}
+            maxBounds={JOS_BOUNDS}
+            minZoom={11}
           >
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
