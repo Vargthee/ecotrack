@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from "react-leaflet";
+import { useEffect, useMemo } from "react";
+import { MapContainer, TileLayer, CircleMarker, Popup, Polyline, useMap } from "react-leaflet";
 import { wasteBins, getBinStatus, getBinStatusLabel } from "@/data/mockData";
 import { BinStatusBadge } from "./BinStatusBadge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,12 +27,37 @@ function FitBounds() {
   return null;
 }
 
+// Nearest-neighbor greedy route for critical bins
+function optimizeRoute(bins: typeof wasteBins): [number, number][] {
+  if (bins.length === 0) return [];
+  const remaining = [...bins];
+  const route: [number, number][] = [];
+  let current = remaining.splice(0, 1)[0];
+  route.push([current.lat, current.lng]);
+  while (remaining.length > 0) {
+    let nearestIdx = 0;
+    let nearestDist = Infinity;
+    for (let i = 0; i < remaining.length; i++) {
+      const d = Math.hypot(remaining[i].lat - current.lat, remaining[i].lng - current.lng);
+      if (d < nearestDist) { nearestDist = d; nearestIdx = i; }
+    }
+    current = remaining.splice(nearestIdx, 1)[0];
+    route.push([current.lat, current.lng]);
+  }
+  return route;
+}
+
 export function BinMapView() {
   const dotColors = {
     green: "bg-success",
     yellow: "bg-warning",
     red: "bg-destructive",
   };
+
+  const criticalRoute = useMemo(
+    () => optimizeRoute(wasteBins.filter((b) => getBinStatus(b.fillLevel) === "red")),
+    []
+  );
 
   return (
     <div className="space-y-6">
@@ -59,6 +84,17 @@ export function BinMapView() {
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
             <FitBounds />
+            {criticalRoute.length > 1 && (
+              <Polyline
+                positions={criticalRoute}
+                pathOptions={{
+                  color: "hsl(var(--destructive))",
+                  weight: 3,
+                  dashArray: "8, 6",
+                  opacity: 0.85,
+                }}
+              />
+            )}
             {wasteBins.map((bin) => {
               const status = getBinStatus(bin.fillLevel);
               return (
