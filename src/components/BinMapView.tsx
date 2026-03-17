@@ -103,6 +103,56 @@ export function BinMapView() {
 
       <DynamicCollectionAlerts />
 
+      {criticalBins.length > 0 && (
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Route className="h-4 w-4 text-destructive" />
+              Optimized Collection Route
+            </CardTitle>
+            <CardDescription>Nearest-neighbor route connecting all critical bins</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10">
+                  <MapPin className="h-5 w-5 text-destructive" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-foreground">{routeStats.stops}</p>
+                  <p className="text-xs text-muted-foreground">Total Stops</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10">
+                  <Route className="h-5 w-5 text-destructive" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-foreground">{routeStats.distanceKm.toFixed(1)} km</p>
+                  <p className="text-xs text-muted-foreground">Est. Distance</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10">
+                  <Clock className="h-5 w-5 text-destructive" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-foreground">{routeStats.timeMin} min</p>
+                  <p className="text-xs text-muted-foreground">Est. Time</p>
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {criticalBins.map((bin, i) => (
+                <span key={bin.id} className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive">
+                  <span className="font-bold">{i + 1}.</span> {bin.location}
+                </span>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Leaflet Map */}
       <Card className="overflow-hidden">
         <div className="h-[500px] w-full">
