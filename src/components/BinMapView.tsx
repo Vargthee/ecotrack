@@ -59,6 +59,16 @@ function optimizeRoute(bins: WasteBin[]): WasteBin[] {
   return ordered;
 }
 
+function haversineKm(a: [number, number], b: [number, number]) {
+  const R = 6371;
+  const dLat = ((b[0] - a[0]) * Math.PI) / 180;
+  const dLng = ((b[1] - a[1]) * Math.PI) / 180;
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((a[0] * Math.PI) / 180) * Math.cos((b[0] * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+}
+
 export function BinMapView() {
   const dotColors = {
     green: "bg-success",
@@ -71,6 +81,18 @@ export function BinMapView() {
     []
   );
   const criticalRoute: [number, number][] = criticalBins.map((b) => [b.lat, b.lng]);
+
+  const routeStats = useMemo(() => {
+    if (criticalRoute.length < 2) return { stops: criticalBins.length, distanceKm: 0, timeMin: 0 };
+    let totalKm = 0;
+    for (let i = 1; i < criticalRoute.length; i++) {
+      totalKm += haversineKm(criticalRoute[i - 1], criticalRoute[i]);
+    }
+    // ~20 km/h avg urban speed + 5 min per stop for collection
+    const driveMin = (totalKm / 20) * 60;
+    const collectionMin = criticalBins.length * 5;
+    return { stops: criticalBins.length, distanceKm: totalKm, timeMin: Math.round(driveMin + collectionMin) };
+  }, [criticalBins, criticalRoute]);
 
   return (
     <div className="space-y-6">
