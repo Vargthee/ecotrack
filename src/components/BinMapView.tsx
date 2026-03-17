@@ -3,7 +3,8 @@ import { MapContainer, TileLayer, CircleMarker, Popup, Polyline, Marker, Tooltip
 import L from "leaflet";
 import { wasteBins, getBinStatus, getBinStatusLabel } from "@/data/mockData";
 import { BinStatusBadge } from "./BinStatusBadge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { MapPin, Clock, Route } from "lucide-react";
 import { DynamicCollectionAlerts } from "./DynamicCollectionAlerts";
 import "leaflet/dist/leaflet.css";
 
