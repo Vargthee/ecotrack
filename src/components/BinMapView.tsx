@@ -3,7 +3,8 @@ import { MapContainer, TileLayer, CircleMarker, Popup, Polyline, Marker, Tooltip
 import L from "leaflet";
 import { wasteBins, getBinStatus, getBinStatusLabel } from "@/data/mockData";
 import { BinStatusBadge } from "./BinStatusBadge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { MapPin, Clock, Route } from "lucide-react";
 import { DynamicCollectionAlerts } from "./DynamicCollectionAlerts";
 import "leaflet/dist/leaflet.css";
 
@@ -58,6 +59,16 @@ function optimizeRoute(bins: WasteBin[]): WasteBin[] {
   return ordered;
 }
 
+function haversineKm(a: [number, number], b: [number, number]) {
+  const R = 6371;
+  const dLat = ((b[0] - a[0]) * Math.PI) / 180;
+  const dLng = ((b[1] - a[1]) * Math.PI) / 180;
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((a[0] * Math.PI) / 180) * Math.cos((b[0] * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+}
+
 export function BinMapView() {
   const dotColors = {
     green: "bg-success",
@@ -71,6 +82,18 @@ export function BinMapView() {
   );
   const criticalRoute: [number, number][] = criticalBins.map((b) => [b.lat, b.lng]);
 
+  const routeStats = useMemo(() => {
+    if (criticalRoute.length < 2) return { stops: criticalBins.length, distanceKm: 0, timeMin: 0 };
+    let totalKm = 0;
+    for (let i = 1; i < criticalRoute.length; i++) {
+      totalKm += haversineKm(criticalRoute[i - 1], criticalRoute[i]);
+    }
+    // ~20 km/h avg urban speed + 5 min per stop for collection
+    const driveMin = (totalKm / 20) * 60;
+    const collectionMin = criticalBins.length * 5;
+    return { stops: criticalBins.length, distanceKm: totalKm, timeMin: Math.round(driveMin + collectionMin) };
+  }, [criticalBins, criticalRoute]);
+
   return (
     <div className="space-y-6">
       <div>
@@ -79,6 +102,56 @@ export function BinMapView() {
       </div>
 
       <DynamicCollectionAlerts />
+
+      {criticalBins.length > 0 && (
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Route className="h-4 w-4 text-destructive" />
+              Optimized Collection Route
+            </CardTitle>
+            <CardDescription>Nearest-neighbor route connecting all critical bins</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10">
+                  <MapPin className="h-5 w-5 text-destructive" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-foreground">{routeStats.stops}</p>
+                  <p className="text-xs text-muted-foreground">Total Stops</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10">
+                  <Route className="h-5 w-5 text-destructive" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-foreground">{routeStats.distanceKm.toFixed(1)} km</p>
+                  <p className="text-xs text-muted-foreground">Est. Distance</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10">
+                  <Clock className="h-5 w-5 text-destructive" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-foreground">{routeStats.timeMin} min</p>
+                  <p className="text-xs text-muted-foreground">Est. Time</p>
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {criticalBins.map((bin, i) => (
+                <span key={bin.id} className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive">
+                  <span className="font-bold">{i + 1}.</span> {bin.location}
+                </span>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Leaflet Map */}
       <Card className="overflow-hidden">
