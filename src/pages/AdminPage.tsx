@@ -103,36 +103,36 @@ const AdminPage = () => {
   const [drivers, setDrivers] = useState(adminDrivers);
   const [subs] = useState(subscribers);
 
-  const handleUserAction = (userId: string, action: "activate" | "suspend" | "ban") => {
+  const handleUserAction = useCallback((userId: string, action: "activate" | "suspend" | "ban") => {
     const statusMap = { activate: "active", suspend: "suspended", ban: "banned" } as const;
     setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, status: statusMap[action] } : u)));
     toast.success(`User ${action}d successfully`);
-  };
+  }, []);
 
-  const handleRoleChange = (userId: string, role: AdminUser["role"]) => {
+  const handleRoleChange = useCallback((userId: string, role: AdminUser["role"]) => {
     setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role } : u)));
     toast.success(`Role updated to ${role}`);
-  };
+  }, []);
 
-  const handleBinDelete = (binId: string) => {
+  const handleBinDelete = useCallback((binId: string) => {
     setBins((prev) => prev.filter((b) => b.id !== binId));
     toast.success("Bin removed");
-  };
+  }, []);
 
-  const handleBinReset = (binId: string) => {
+  const handleBinReset = useCallback((binId: string) => {
     setBins((prev) => prev.map((b) => (b.id === binId ? { ...b, fillLevel: 0 } : b)));
     toast.success("Bin fill level reset");
-  };
+  }, []);
 
-  const handleReportStatus = (reportId: string, status: CitizenReport["status"]) => {
+  const handleReportStatus = useCallback((reportId: string, status: CitizenReport["status"]) => {
     setReports((prev) => prev.map((r) => (r.id === reportId ? { ...r, status } : r)));
     toast.success(`Report marked as ${status.replace("_", " ")}`);
-  };
+  }, []);
 
-  const handleDriverStatus = (driverId: string, status: AdminDriver["status"]) => {
+  const handleDriverStatus = useCallback((driverId: string, status: AdminDriver["status"]) => {
     setDrivers((prev) => prev.map((d) => (d.id === driverId ? { ...d, status } : d)));
     toast.success(`Driver status updated`);
-  };
+  }, []);
 
   return (
     <div className="space-y-6 p-4 md:p-6">
