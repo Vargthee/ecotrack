@@ -100,10 +100,10 @@ const AdminPage = () => {
 
       {/* Overview Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard title="Total Users" value={adminStats.totalUsers} icon={Users} description={`${adminStats.activeUsers} active`} />
-        <StatCard title="Drivers" value={adminStats.totalDrivers} icon={Truck} description={`${adminStats.driversOnDuty} on duty`} />
-        <StatCard title="Subscribers" value={adminStats.totalSubscribers} icon={CreditCard} description={`${adminStats.activeSubscribers} active`} />
-        <StatCard title="Monthly Revenue" value={`₦${(adminStats.monthlyRevenue / 1000).toFixed(0)}k`} icon={BarChart3} description="All plans combined" />
+        <StatCard title="Total Users" value={adminStats.totalUsers} icon={Users} subtitle={`${adminStats.activeUsers} active`} />
+        <StatCard title="Drivers" value={adminStats.totalDrivers} icon={Truck} subtitle={`${adminStats.driversOnDuty} on duty`} />
+        <StatCard title="Subscribers" value={adminStats.totalSubscribers} icon={CreditCard} subtitle={`${adminStats.activeSubscribers} active`} />
+        <StatCard title="Monthly Revenue" value={`₦${(adminStats.monthlyRevenue / 1000).toFixed(0)}k`} icon={BarChart3} subtitle="All plans combined" />
       </div>
 
       {/* Tabs */}
