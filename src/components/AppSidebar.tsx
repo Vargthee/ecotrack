@@ -1,4 +1,4 @@
-import { LayoutDashboard, Map, Truck, BarChart3, AlertTriangle, Leaf, CreditCard, Sparkles } from "lucide-react";
+import { LayoutDashboard, Map, Truck, BarChart3, AlertTriangle, Leaf, CreditCard, Sparkles, Shield } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,7 @@ const navItems = [
   { title: "Analytics", url: "/analytics", icon: BarChart3, requiredTier: "pro" as const },
   { title: "Driver Tasks", url: "/driver", icon: Truck, requiredTier: "pro" as const },
   { title: "Reports", url: "/reports", icon: AlertTriangle },
+  { title: "Admin Panel", url: "/admin", icon: Shield },
 ];
 
 const billingItems = [
