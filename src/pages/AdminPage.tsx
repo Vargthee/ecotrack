@@ -47,6 +47,55 @@ const binFillColors: Record<string, string> = {
   red: "bg-destructive/15 text-destructive border-destructive/30",
 };
 
+import { useState, useCallback, useMemo } from "react";
+import { Users, Truck, CreditCard, Trash2, BarChart3, Shield, Ban, CheckCircle, AlertTriangle, Star, MapPin, Eye, Pencil, XCircle } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
+import { adminUsers, adminDrivers, subscribers, adminStats, type AdminUser, type AdminDriver, type Subscriber } from "@/data/adminMockData";
+import { wasteBins, citizenReports, analyticsData, getBinStatus, type WasteBin, type CitizenReport } from "@/data/mockData";
+import { StatCard } from "@/components/StatCard";
+
+const userStatusColors: Record<AdminUser["status"], string> = {
+  active: "bg-success/15 text-success border-success/30",
+  suspended: "bg-warning/15 text-warning border-warning/30",
+  banned: "bg-destructive/15 text-destructive border-destructive/30",
+};
+
+const driverStatusColors: Record<AdminDriver["status"], string> = {
+  on_duty: "bg-success/15 text-success border-success/30",
+  off_duty: "bg-muted text-muted-foreground border-border",
+  on_leave: "bg-warning/15 text-warning border-warning/30",
+};
+
+const subStatusColors: Record<Subscriber["status"], string> = {
+  active: "bg-success/15 text-success border-success/30",
+  past_due: "bg-warning/15 text-warning border-warning/30",
+  canceled: "bg-destructive/15 text-destructive border-destructive/30",
+};
+
+const planColors: Record<Subscriber["plan"], string> = {
+  basic: "bg-muted text-muted-foreground border-border",
+  pro: "bg-primary/15 text-primary border-primary/30",
+  enterprise: "bg-accent text-accent-foreground border-accent-foreground/20",
+};
+
+const reportStatusColors: Record<CitizenReport["status"], string> = {
+  pending: "bg-warning/15 text-warning border-warning/30",
+  in_progress: "bg-primary/15 text-primary border-primary/30",
+  resolved: "bg-success/15 text-success border-success/30",
+};
+
+const binFillColors: Record<string, string> = {
+  green: "bg-success/15 text-success border-success/30",
+  yellow: "bg-warning/15 text-warning border-warning/30",
+  red: "bg-destructive/15 text-destructive border-destructive/30",
+};
+
 const AdminPage = () => {
   const [users, setUsers] = useState(adminUsers);
   const [bins, setBins] = useState(wasteBins);
