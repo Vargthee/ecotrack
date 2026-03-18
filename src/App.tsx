@@ -12,6 +12,7 @@ import DriverPage from "./pages/DriverPage";
 import ReportsPage from "./pages/ReportsPage";
 import PricingPage from "./pages/PricingPage";
 import BillingPage from "./pages/BillingPage";
+import AdminPage from "./pages/AdminPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
