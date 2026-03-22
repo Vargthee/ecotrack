@@ -49,11 +49,24 @@ const binFillColors: Record<string, string> = {
 };
 
 const AdminPage = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState(
+    () => sessionStorage.getItem("ecotrack_admin_auth") === "true"
+  );
   const [users, setUsers] = useState(adminUsers);
   const [bins, setBins] = useState(wasteBins);
   const [reports, setReports] = useState(citizenReports);
   const [drivers, setDrivers] = useState(adminDrivers);
   const [subs] = useState(subscribers);
+
+  const handleLogout = useCallback(() => {
+    sessionStorage.removeItem("ecotrack_admin_auth");
+    setIsAuthenticated(false);
+    toast.success("Logged out successfully");
+  }, []);
+
+  if (!isAuthenticated) {
+    return <AdminLogin onLogin={() => setIsAuthenticated(true)} />;
+  }
 
   const handleUserAction = useCallback((userId: string, action: "activate" | "suspend" | "ban") => {
     const statusMap = { activate: "active", suspend: "suspended", ban: "banned" } as const;
