@@ -64,10 +64,6 @@ const AdminPage = () => {
     toast.success("Logged out successfully");
   }, []);
 
-  if (!isAuthenticated) {
-    return <AdminLogin onLogin={() => setIsAuthenticated(true)} />;
-  }
-
   const handleUserAction = useCallback((userId: string, action: "activate" | "suspend" | "ban") => {
     const statusMap = { activate: "active", suspend: "suspended", ban: "banned" } as const;
     setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, status: statusMap[action] } : u)));
@@ -99,17 +95,26 @@ const AdminPage = () => {
     toast.success(`Driver status updated`);
   }, []);
 
+  if (!isAuthenticated) {
+    return <AdminLogin onLogin={() => setIsAuthenticated(true)} />;
+  }
+
   return (
     <div className="space-y-6 p-4 md:p-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10">
-          <Shield className="h-5 w-5 text-destructive" />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10">
+            <Shield className="h-5 w-5 text-destructive" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Admin Dashboard</h1>
+            <p className="text-sm text-muted-foreground">Full system control &amp; management</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Admin Dashboard</h1>
-          <p className="text-sm text-muted-foreground">Full system control &amp; management</p>
-        </div>
+        <Button variant="outline" size="sm" onClick={handleLogout}>
+          <LogOut className="h-4 w-4 mr-1.5" /> Logout
+        </Button>
       </div>
 
       {/* Overview Stats */}
