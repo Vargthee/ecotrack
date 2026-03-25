@@ -1,7 +1,7 @@
 import {
   Map, Truck, BarChart3, AlertTriangle, Leaf, CreditCard, Sparkles,
   Shield, User, Award, FileCheck, LogOut, LayoutDashboard, FileText,
-  Navigation, Wallet
+  Navigation, Wallet, Users, Trash2
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useNavigate } from "react-router-dom";
@@ -73,23 +73,40 @@ const driverNavGroups = [
 
 const adminNavGroups = [
   {
-    label: "Navigation",
+    label: "System",
     items: [
-      { title: "Dashboard", url: "/", icon: LayoutDashboard },
+      { title: "Admin Dashboard", url: "/admin", icon: Shield },
       { title: "Bin Map", url: "/map", icon: Map },
       { title: "Analytics", url: "/analytics", icon: BarChart3 },
-      { title: "Reports", url: "/reports", icon: AlertTriangle },
-      { title: "Admin Panel", url: "/admin", icon: Shield },
     ],
   },
   {
-    label: "Account",
+    label: "Manage",
+    items: [
+      { title: "Reports", url: "/reports", icon: AlertTriangle },
+      { title: "Users", url: "/admin", icon: Users },
+    ],
+  },
+  {
+    label: "Platform",
     items: [
       { title: "Pricing", url: "/pricing", icon: Sparkles },
       { title: "Billing", url: "/billing", icon: CreditCard },
     ],
   },
 ];
+
+const roleBadgeStyle: Record<string, string> = {
+  user: "bg-primary/20 text-sidebar-primary",
+  driver: "bg-warning/20 text-warning",
+  admin: "bg-destructive/20 text-destructive",
+};
+
+const roleLabel: Record<string, string> = {
+  user: "User",
+  driver: "Driver",
+  admin: "Admin",
+};
 
 export function AppSidebar() {
   const { state } = useSidebar();
@@ -100,14 +117,11 @@ export function AppSidebar() {
   const plan = PLAN_CONFIG[subscription.plan_type];
 
   const navGroups =
-    user?.role === "driver"
+    user?.role === "admin"
+      ? adminNavGroups
+      : user?.role === "driver"
       ? driverNavGroups
-      : user?.role === "user"
-      ? userNavGroups
-      : adminNavGroups;
-
-  const roleLabel = user?.role === "driver" ? "Driver" : user?.role === "user" ? "User" : "Admin";
-  const roleColor = user?.role === "driver" ? "bg-warning/20 text-warning" : "bg-primary/20 text-sidebar-primary";
+      : userNavGroups;
 
   return (
     <Sidebar collapsible="icon" className="border-r-0">
@@ -138,7 +152,7 @@ export function AppSidebar() {
                     <SidebarMenuButton asChild>
                       <NavLink
                         to={item.url}
-                        end={item.url === "/"}
+                        end={item.url === "/admin" || item.url === "/"}
                         className="text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
                         activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
                       >
@@ -160,13 +174,16 @@ export function AppSidebar() {
             <div className="rounded-lg bg-sidebar-accent/50 p-3 space-y-1">
               <p className="text-xs font-medium text-sidebar-foreground truncate">{user?.name}</p>
               <p className="text-[10px] text-sidebar-foreground/60 truncate">{user?.email}</p>
-              <Badge className={`${roleColor} border-0 text-[10px] mt-1`}>{roleLabel}</Badge>
+              <Badge className={`${roleBadgeStyle[user?.role ?? "user"]} border-0 text-[10px] mt-1`}>
+                {roleLabel[user?.role ?? "user"]}
+              </Badge>
             </div>
             <Button
               variant="ghost"
               size="sm"
               className="w-full text-sidebar-foreground/70 hover:text-sidebar-foreground justify-start"
               onClick={() => { logout(); navigate("/auth"); }}
+              data-testid="button-signout"
             >
               <LogOut className="h-4 w-4 mr-2" /> Sign Out
             </Button>
@@ -179,6 +196,7 @@ export function AppSidebar() {
             size="icon"
             className="w-full text-sidebar-foreground/70 hover:text-sidebar-foreground"
             onClick={() => { logout(); navigate("/auth"); }}
+            data-testid="button-signout-collapsed"
           >
             <LogOut className="h-4 w-4" />
           </Button>

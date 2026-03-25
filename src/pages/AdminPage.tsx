@@ -1,16 +1,25 @@
-import { useState, useCallback, useMemo } from "react";
-import { Users, Truck, CreditCard, Trash2, BarChart3, Shield, Ban, CheckCircle, AlertTriangle, Star, MapPin, Eye, Pencil, XCircle, LogOut } from "lucide-react";
-import { AdminLogin } from "@/components/AdminLogin";
+import { useState, useCallback } from "react";
+import {
+  Users, Truck, CreditCard, Trash2, BarChart3, Shield,
+  Ban, CheckCircle, AlertTriangle, Star, MapPin, XCircle,
+  TrendingUp, Activity, Banknote
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { adminUsers, adminDrivers, subscribers, adminStats, type AdminUser, type AdminDriver, type Subscriber } from "@/data/adminMockData";
-import { wasteBins, citizenReports, analyticsData, getBinStatus, type WasteBin, type CitizenReport } from "@/data/mockData";
+import {
+  adminUsers, adminDrivers, subscribers, adminStats,
+  type AdminUser, type AdminDriver, type Subscriber,
+} from "@/data/adminMockData";
+import { wasteBins, citizenReports, analyticsData, getBinStatus, type CitizenReport } from "@/data/mockData";
 import { StatCard } from "@/components/StatCard";
+import { useAuth } from "@/contexts/AuthContext";
+import { BarChart, Bar, XAxis, ResponsiveContainer, Tooltip, LineChart, Line } from "recharts";
 
 const userStatusColors: Record<AdminUser["status"], string> = {
   active: "bg-success/15 text-success border-success/30",
@@ -48,21 +57,22 @@ const binFillColors: Record<string, string> = {
   red: "bg-destructive/15 text-destructive border-destructive/30",
 };
 
+const revenueData = [
+  { month: "Oct", revenue: 210000 },
+  { month: "Nov", revenue: 265000 },
+  { month: "Dec", revenue: 298000 },
+  { month: "Jan", revenue: 315000 },
+  { month: "Feb", revenue: 340000 },
+  { month: "Mar", revenue: 360000 },
+];
+
 const AdminPage = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(
-    () => sessionStorage.getItem("ecotrack_admin_auth") === "true"
-  );
+  const { user } = useAuth();
   const [users, setUsers] = useState(adminUsers);
   const [bins, setBins] = useState(wasteBins);
   const [reports, setReports] = useState(citizenReports);
   const [drivers, setDrivers] = useState(adminDrivers);
   const [subs] = useState(subscribers);
-
-  const handleLogout = useCallback(() => {
-    sessionStorage.removeItem("ecotrack_admin_auth");
-    setIsAuthenticated(false);
-    toast.success("Logged out successfully");
-  }, []);
 
   const handleUserAction = useCallback((userId: string, action: "activate" | "suspend" | "ban") => {
     const statusMap = { activate: "active", suspend: "suspended", ban: "banned" } as const;
@@ -81,8 +91,8 @@ const AdminPage = () => {
   }, []);
 
   const handleBinReset = useCallback((binId: string) => {
-    setBins((prev) => prev.map((b) => (b.id === binId ? { ...b, fillLevel: 0 } : b)));
-    toast.success("Bin fill level reset");
+    setBins((prev) => prev.map((b) => (b.id === binId ? { ...b, fillLevel: 0, lastCollected: new Date().toISOString().split("T")[0] } : b)));
+    toast.success("Bin marked as collected");
   }, []);
 
   const handleReportStatus = useCallback((reportId: string, status: CitizenReport["status"]) => {
@@ -92,47 +102,160 @@ const AdminPage = () => {
 
   const handleDriverStatus = useCallback((driverId: string, status: AdminDriver["status"]) => {
     setDrivers((prev) => prev.map((d) => (d.id === driverId ? { ...d, status } : d)));
-    toast.success(`Driver status updated`);
+    toast.success("Driver status updated");
   }, []);
 
-  if (!isAuthenticated) {
-    return <AdminLogin onLogin={() => setIsAuthenticated(true)} />;
-  }
+  const criticalBins = bins.filter((b) => getBinStatus(b.fillLevel) === "red");
+  const pendingReports = reports.filter((r) => r.status === "pending");
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-destructive/10 shrink-0">
             <Shield className="h-5 w-5 text-destructive" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-foreground">Admin Dashboard</h1>
-            <p className="text-sm text-muted-foreground">Full system control &amp; management</p>
+            <p className="text-sm text-muted-foreground">
+              Signed in as <span className="font-medium text-foreground">{user?.name}</span>
+            </p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={handleLogout}>
-          <LogOut className="h-4 w-4 mr-1.5" /> Logout
-        </Button>
+        {(criticalBins.length > 0 || pendingReports.length > 0) && (
+          <div className="flex items-center gap-2">
+            {criticalBins.length > 0 && (
+              <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/30 gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-destructive animate-pulse inline-block" />
+                {criticalBins.length} critical bins
+              </Badge>
+            )}
+            {pendingReports.length > 0 && (
+              <Badge variant="outline" className="bg-warning/10 text-warning border-warning/30 gap-1.5">
+                <AlertTriangle className="h-3 w-3" />
+                {pendingReports.length} pending reports
+              </Badge>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Overview Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard title="Total Users" value={adminStats.totalUsers} icon={Users} subtitle={`${adminStats.activeUsers} active`} />
-        <StatCard title="Drivers" value={adminStats.totalDrivers} icon={Truck} subtitle={`${adminStats.driversOnDuty} on duty`} />
+        <StatCard title="Active Drivers" value={adminStats.totalDrivers} icon={Truck} subtitle={`${adminStats.driversOnDuty} on duty`} />
         <StatCard title="Subscribers" value={adminStats.totalSubscribers} icon={CreditCard} subtitle={`${adminStats.activeSubscribers} active`} />
-        <StatCard title="Monthly Revenue" value={`₦${(adminStats.monthlyRevenue / 1000).toFixed(0)}k`} icon={BarChart3} subtitle="All plans combined" />
+        <StatCard
+          title="Monthly Revenue"
+          value={`₦${(adminStats.monthlyRevenue / 1000).toFixed(0)}k`}
+          icon={Banknote}
+          subtitle="All plans combined"
+          variant="primary"
+        />
       </div>
 
-      {/* Tabs */}
+      {/* Quick charts row */}
+      <div className="grid md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" /> Revenue Growth
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={140}>
+              <LineChart data={revenueData}>
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }}
+                  formatter={(v: number) => [`₦${v.toLocaleString()}`, "Revenue"]}
+                />
+                <Line type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+              <Activity className="h-4 w-4" /> Weekly Collections
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={140}>
+              <BarChart data={analyticsData.weeklyTonnage}>
+                <XAxis dataKey="day" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }}
+                />
+                <Bar dataKey="tonnage" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="recycling" fill="hsl(var(--success))" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Bin health summary */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            Bin Network Health
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-3 gap-4 mb-4">
+            {[
+              { label: "Low (<50%)", count: bins.filter(b => getBinStatus(b.fillLevel) === "green").length, color: "bg-success", textColor: "text-success" },
+              { label: "Medium (50–80%)", count: bins.filter(b => getBinStatus(b.fillLevel) === "yellow").length, color: "bg-warning", textColor: "text-warning" },
+              { label: "Critical (>80%)", count: bins.filter(b => getBinStatus(b.fillLevel) === "red").length, color: "bg-destructive", textColor: "text-destructive" },
+            ].map((s) => (
+              <div key={s.label} className="text-center">
+                <p className={`text-2xl font-bold ${s.textColor}`}>{s.count}</p>
+                <p className="text-xs text-muted-foreground">{s.label}</p>
+              </div>
+            ))}
+          </div>
+          <div className="space-y-2">
+            {bins.slice(0, 4).map((bin) => {
+              const st = getBinStatus(bin.fillLevel);
+              return (
+                <div key={bin.id} className="flex items-center gap-3">
+                  <p className="text-xs text-muted-foreground w-40 truncate shrink-0">{bin.location}</p>
+                  <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${st === "green" ? "bg-success" : st === "yellow" ? "bg-warning" : "bg-destructive"}`}
+                      style={{ width: `${bin.fillLevel}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-mono text-muted-foreground w-8 text-right shrink-0">{bin.fillLevel}%</span>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Management Tabs */}
       <Tabs defaultValue="users" className="space-y-4">
         <TabsList className="grid w-full grid-cols-5 h-auto">
-          <TabsTrigger value="users" className="text-xs md:text-sm"><Users className="h-3.5 w-3.5 mr-1.5 hidden md:inline" />Users</TabsTrigger>
-          <TabsTrigger value="bins" className="text-xs md:text-sm"><Trash2 className="h-3.5 w-3.5 mr-1.5 hidden md:inline" />Bins</TabsTrigger>
-          <TabsTrigger value="drivers" className="text-xs md:text-sm"><Truck className="h-3.5 w-3.5 mr-1.5 hidden md:inline" />Drivers</TabsTrigger>
-          <TabsTrigger value="reports" className="text-xs md:text-sm"><AlertTriangle className="h-3.5 w-3.5 mr-1.5 hidden md:inline" />Reports</TabsTrigger>
-          <TabsTrigger value="subscribers" className="text-xs md:text-sm"><CreditCard className="h-3.5 w-3.5 mr-1.5 hidden md:inline" />Subs</TabsTrigger>
+          <TabsTrigger value="users" className="text-xs md:text-sm">
+            <Users className="h-3.5 w-3.5 mr-1.5 hidden md:inline" />Users
+          </TabsTrigger>
+          <TabsTrigger value="bins" className="text-xs md:text-sm">
+            <Trash2 className="h-3.5 w-3.5 mr-1.5 hidden md:inline" />Bins
+          </TabsTrigger>
+          <TabsTrigger value="drivers" className="text-xs md:text-sm">
+            <Truck className="h-3.5 w-3.5 mr-1.5 hidden md:inline" />Drivers
+          </TabsTrigger>
+          <TabsTrigger value="reports" className="text-xs md:text-sm">
+            <AlertTriangle className="h-3.5 w-3.5 mr-1.5 hidden md:inline" />Reports
+          </TabsTrigger>
+          <TabsTrigger value="subscribers" className="text-xs md:text-sm">
+            <CreditCard className="h-3.5 w-3.5 mr-1.5 hidden md:inline" />Subs
+          </TabsTrigger>
         </TabsList>
 
         {/* Users Tab */}
@@ -140,9 +263,9 @@ const AdminPage = () => {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">User Management</CardTitle>
-              <CardDescription>View, edit roles, suspend or ban users</CardDescription>
+              <CardDescription>View, edit roles, suspend or ban accounts</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -155,13 +278,13 @@ const AdminPage = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.name}</TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{user.email}</TableCell>
+                  {users.map((u) => (
+                    <TableRow key={u.id} data-testid={`row-user-${u.id}`}>
+                      <TableCell className="font-medium">{u.name}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{u.email}</TableCell>
                       <TableCell>
-                        <Select value={user.role} onValueChange={(val) => handleRoleChange(user.id, val as AdminUser["role"])}>
-                          <SelectTrigger className="w-24 h-8 text-xs">
+                        <Select value={u.role} onValueChange={(val) => handleRoleChange(u.id, val as AdminUser["role"])}>
+                          <SelectTrigger className="w-24 h-8 text-xs" data-testid={`select-role-${u.id}`}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -172,24 +295,24 @@ const AdminPage = () => {
                         </Select>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={userStatusColors[user.status]}>{user.status}</Badge>
+                        <Badge variant="outline" className={userStatusColors[u.status]}>{u.status}</Badge>
                       </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{user.joinedAt}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{u.joinedAt}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex gap-1 justify-end">
-                          {user.status !== "active" && (
-                            <Button size="sm" variant="ghost" className="h-7 text-xs text-success" onClick={() => handleUserAction(user.id, "activate")}>
-                              <CheckCircle className="h-3.5 w-3.5" />
+                          {u.status !== "active" && (
+                            <Button size="sm" variant="ghost" className="h-7" onClick={() => handleUserAction(u.id, "activate")} title="Activate">
+                              <CheckCircle className="h-3.5 w-3.5 text-success" />
                             </Button>
                           )}
-                          {user.status !== "suspended" && (
-                            <Button size="sm" variant="ghost" className="h-7 text-xs text-warning" onClick={() => handleUserAction(user.id, "suspend")}>
-                              <AlertTriangle className="h-3.5 w-3.5" />
+                          {u.status !== "suspended" && (
+                            <Button size="sm" variant="ghost" className="h-7" onClick={() => handleUserAction(u.id, "suspend")} title="Suspend">
+                              <AlertTriangle className="h-3.5 w-3.5 text-warning" />
                             </Button>
                           )}
-                          {user.status !== "banned" && (
-                            <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => handleUserAction(user.id, "ban")}>
-                              <Ban className="h-3.5 w-3.5" />
+                          {u.status !== "banned" && (
+                            <Button size="sm" variant="ghost" className="h-7" onClick={() => handleUserAction(u.id, "ban")} title="Ban">
+                              <Ban className="h-3.5 w-3.5 text-destructive" />
                             </Button>
                           )}
                         </div>
@@ -207,9 +330,9 @@ const AdminPage = () => {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Bin Management</CardTitle>
-              <CardDescription>Edit fill levels, delete bins, or reset status</CardDescription>
+              <CardDescription>Monitor fill levels, reset status, or decommission bins</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -226,19 +349,19 @@ const AdminPage = () => {
                   {bins.map((bin) => {
                     const status = getBinStatus(bin.fillLevel);
                     return (
-                      <TableRow key={bin.id}>
+                      <TableRow key={bin.id} data-testid={`row-bin-${bin.id}`}>
                         <TableCell className="font-mono text-xs">{bin.id}</TableCell>
                         <TableCell className="font-medium">{bin.location}</TableCell>
                         <TableCell><Badge variant="outline" className="capitalize text-xs">{bin.type}</Badge></TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <div className="h-2 w-16 rounded-full bg-muted overflow-hidden">
+                            <div className="h-2 w-20 rounded-full bg-muted overflow-hidden">
                               <div
                                 className={`h-full rounded-full ${status === "green" ? "bg-success" : status === "yellow" ? "bg-warning" : "bg-destructive"}`}
                                 style={{ width: `${bin.fillLevel}%` }}
                               />
                             </div>
-                            <span className="text-xs text-muted-foreground">{bin.fillLevel}%</span>
+                            <span className="text-xs font-mono text-muted-foreground">{bin.fillLevel}%</span>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -247,11 +370,11 @@ const AdminPage = () => {
                         <TableCell className="text-muted-foreground text-sm">{bin.lastCollected}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex gap-1 justify-end">
-                            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => handleBinReset(bin.id)}>
+                            <Button size="sm" variant="ghost" className="h-7" onClick={() => handleBinReset(bin.id)} title="Mark collected">
                               <CheckCircle className="h-3.5 w-3.5 text-success" />
                             </Button>
-                            <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => handleBinDelete(bin.id)}>
-                              <XCircle className="h-3.5 w-3.5" />
+                            <Button size="sm" variant="ghost" className="h-7" onClick={() => handleBinDelete(bin.id)} title="Remove bin">
+                              <XCircle className="h-3.5 w-3.5 text-destructive" />
                             </Button>
                           </div>
                         </TableCell>
@@ -269,9 +392,9 @@ const AdminPage = () => {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Driver Management</CardTitle>
-              <CardDescription>Manage driver accounts, zones, and status</CardDescription>
+              <CardDescription>Manage driver accounts, zones, and duty status</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -281,16 +404,16 @@ const AdminPage = () => {
                     <TableHead>Status</TableHead>
                     <TableHead>Tasks Done</TableHead>
                     <TableHead>Rating</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="text-right">Update Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {drivers.map((driver) => (
-                    <TableRow key={driver.id}>
+                    <TableRow key={driver.id} data-testid={`row-driver-${driver.id}`}>
                       <TableCell>
                         <div>
-                          <div className="font-medium">{driver.name}</div>
-                          <div className="text-xs text-muted-foreground">{driver.email}</div>
+                          <p className="font-medium">{driver.name}</p>
+                          <p className="text-xs text-muted-foreground">{driver.email}</p>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -337,9 +460,9 @@ const AdminPage = () => {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Citizen Reports</CardTitle>
-              <CardDescription>Review and manage submitted reports</CardDescription>
+              <CardDescription>Review and triage submitted reports from the community</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -348,12 +471,12 @@ const AdminPage = () => {
                     <TableHead>Description</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Submitted</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="text-right">Update</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {reports.map((report) => (
-                    <TableRow key={report.id}>
+                    <TableRow key={report.id} data-testid={`row-report-${report.id}`}>
                       <TableCell className="font-mono text-xs">{report.id}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className="capitalize text-xs">{report.type.replace("_", " ")}</Badge>
@@ -364,7 +487,9 @@ const AdminPage = () => {
                           {report.status.replace("_", " ")}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{new Date(report.createdAt).toLocaleDateString()}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {new Date(report.createdAt).toLocaleDateString()}
+                      </TableCell>
                       <TableCell className="text-right">
                         <Select value={report.status} onValueChange={(val) => handleReportStatus(report.id, val as CitizenReport["status"])}>
                           <SelectTrigger className="w-28 h-8 text-xs">
@@ -389,10 +514,18 @@ const AdminPage = () => {
         <TabsContent value="subscribers">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Subscribers</CardTitle>
-              <CardDescription>View all subscription plans and billing status</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg">Subscribers</CardTitle>
+                  <CardDescription>All subscription plans and billing status</CardDescription>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-foreground">₦{adminStats.monthlyRevenue.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Monthly recurring revenue</p>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -406,7 +539,7 @@ const AdminPage = () => {
                 </TableHeader>
                 <TableBody>
                   {subs.map((sub) => (
-                    <TableRow key={sub.id}>
+                    <TableRow key={sub.id} data-testid={`row-sub-${sub.id}`}>
                       <TableCell className="font-medium">{sub.name}</TableCell>
                       <TableCell className="text-muted-foreground text-sm">{sub.email}</TableCell>
                       <TableCell>
@@ -417,7 +550,7 @@ const AdminPage = () => {
                           {sub.status.replace("_", " ")}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-sm">₦{sub.amountNgn.toLocaleString()}/mo</TableCell>
+                      <TableCell className="text-sm font-mono">₦{sub.amountNgn.toLocaleString()}/mo</TableCell>
                       <TableCell className="text-muted-foreground text-sm">{sub.nextBilling}</TableCell>
                     </TableRow>
                   ))}

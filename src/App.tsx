@@ -48,10 +48,10 @@ function ProtectedLayout() {
 
 function AuthGuard() {
   const { isAuthenticated, user } = useAuth();
-  if (isAuthenticated) {
-    return <Navigate to={user?.role === "driver" ? "/driver" : "/user-dashboard"} replace />;
-  }
-  return <AuthPage />;
+  if (!isAuthenticated) return <AuthPage />;
+  if (user?.role === "driver") return <Navigate to="/driver" replace />;
+  if (user?.role === "admin") return <Navigate to="/admin" replace />;
+  return <Navigate to="/user-dashboard" replace />;
 }
 
 const App = () => (

@@ -3,7 +3,9 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const Index = () => {
   const { user } = useAuth();
-  return <Navigate to={user?.role === "driver" ? "/driver" : "/user-dashboard"} replace />;
+  if (user?.role === "admin") return <Navigate to="/admin" replace />;
+  if (user?.role === "driver") return <Navigate to="/driver" replace />;
+  return <Navigate to="/user-dashboard" replace />;
 };
 
 export default Index;

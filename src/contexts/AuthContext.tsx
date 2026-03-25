@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
 
-export type UserRole = "user" | "driver";
+export type UserRole = "user" | "driver" | "admin";
 
 export interface AuthUser {
   id: string;
@@ -31,6 +31,10 @@ const MOCK_USERS: Record<string, { password: string; user: AuthUser }> = {
     password: "driver123",
     user: { id: "d1", name: "Ibrahim Musa", email: "driver@ecotrack.com", role: "driver", joinedAt: "2025-11-20" },
   },
+  "admin@ecotrack.com": {
+    password: "admin123",
+    user: { id: "a1", name: "Fatima Yusuf", email: "admin@ecotrack.com", role: "admin", joinedAt: "2025-08-20" },
+  },
 };
 
 function getStoredUser(): AuthUser | null {
@@ -52,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(entry.user);
       return true;
     }
-    // Allow any registration to succeed as mock
+    if (role === "admin") return false;
     const mockUser: AuthUser = {
       id: `mock_${Date.now()}`,
       name: email.split("@")[0],
@@ -66,6 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const register = useCallback(async (name: string, email: string, _password: string, role: UserRole): Promise<boolean> => {
+    if (role === "admin") return false;
     await new Promise((r) => setTimeout(r, 500));
     const newUser: AuthUser = {
       id: `mock_${Date.now()}`,
@@ -81,6 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => {
     sessionStorage.removeItem("ecotrack_user");
+    sessionStorage.removeItem("ecotrack_admin_auth");
     setUser(null);
   }, []);
 
