@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Leaf, User, Truck, Eye, EyeOff, ArrowLeft, Shield } from "lucide-react";
+import { Leaf, User, Truck, Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 
 const roles: {
@@ -37,16 +37,6 @@ const roles: {
     ctaVariant: "outline",
     iconBg: "bg-accent",
     iconColor: "text-accent-foreground",
-  },
-  {
-    id: "admin",
-    label: "Admin Portal",
-    sublabel: "System management, users, bins & analytics",
-    icon: Shield,
-    cta: "Admin Login",
-    ctaVariant: "destructive",
-    iconBg: "bg-destructive/10",
-    iconColor: "text-destructive",
   },
 ];
 
@@ -81,7 +71,7 @@ const AuthPage = () => {
             <p className="text-muted-foreground">How would you like to continue?</p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {roles.map((role) => (
               <Card
                 key={role.id}
@@ -110,8 +100,6 @@ const AuthPage = () => {
             <span className="font-mono">user@ecotrack.com / user123</span>
             {" · "}
             <span className="font-mono">driver@ecotrack.com / driver123</span>
-            {" · "}
-            <span className="font-mono">admin@ecotrack.com / admin123</span>
           </p>
         </div>
       </div>
@@ -161,16 +149,14 @@ const AuthPage = () => {
             {mode === "login" ? "Sign In" : "Create Account"}
           </CardTitle>
           <CardDescription>
-            {selectedRole === "admin"
-              ? "Admin access — credentials required"
-              : mode === "login"
+            {mode === "login"
               ? `Sign in as ${selectedRole === "user" ? "a user" : "a driver"}`
               : `Register as ${selectedRole === "user" ? "a user" : "a driver"}`}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {mode === "register" && selectedRole !== "admin" && (
+            {mode === "register" && (
               <div className="space-y-2">
                 <Label htmlFor="name">Full Name</Label>
                 <Input
@@ -222,7 +208,6 @@ const AuthPage = () => {
             <Button
               type="submit"
               className="w-full"
-              variant={selectedRole === "admin" ? "destructive" : "default"}
               disabled={loading}
               data-testid="button-submit"
             >
@@ -235,18 +220,16 @@ const AuthPage = () => {
               )}
             </Button>
 
-            {selectedRole !== "admin" && (
-              <p className="text-sm text-center text-muted-foreground">
-                {mode === "login" ? "Don't have an account?" : "Already have an account?"}{" "}
-                <button
-                  type="button"
-                  className="text-primary font-medium hover:underline"
-                  onClick={() => setMode(mode === "login" ? "register" : "login")}
-                >
-                  {mode === "login" ? "Sign Up" : "Sign In"}
-                </button>
-              </p>
-            )}
+            <p className="text-sm text-center text-muted-foreground">
+              {mode === "login" ? "Don't have an account?" : "Already have an account?"}{" "}
+              <button
+                type="button"
+                className="text-primary font-medium hover:underline"
+                onClick={() => setMode(mode === "login" ? "register" : "login")}
+              >
+                {mode === "login" ? "Sign Up" : "Sign In"}
+              </button>
+            </p>
           </form>
         </CardContent>
       </Card>

@@ -17,6 +17,7 @@ const ReportsPage = lazy(() => import("./pages/ReportsPage"));
 const PricingPage = lazy(() => import("./pages/PricingPage"));
 const BillingPage = lazy(() => import("./pages/BillingPage"));
 const AdminPage = lazy(() => import("./pages/AdminPage"));
+const AdminLoginPage = lazy(() => import("./pages/AdminLoginPage"));
 const AuthPage = lazy(() => import("./pages/AuthPage"));
 const UserDashboard = lazy(() => import("./pages/UserDashboard"));
 const EcoPointsPage = lazy(() => import("./pages/EcoPointsPage"));
@@ -65,6 +66,7 @@ const App = () => (
             <Suspense fallback={<PageLoader />}>
               <Routes>
                 <Route path="/auth" element={<AuthGuard />} />
+                <Route path="/admin/login" element={<AdminLoginPage />} />
                 <Route element={<ProtectedLayout />}>
                   <Route path="/" element={<Index />} />
                   <Route path="/map" element={<MapPage />} />
