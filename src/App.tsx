@@ -1,15 +1,14 @@
 import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import { FloatingChatbot } from "@/components/FloatingChatbot";
 
-// Lazy load all pages for code splitting
 const Index = lazy(() => import("./pages/Index"));
 const MapPage = lazy(() => import("./pages/MapPage"));
 const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
@@ -41,6 +40,20 @@ function PageLoader() {
   );
 }
 
+function ProtectedLayout() {
+  const { isAuthenticated } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/auth" replace />;
+  return <AppLayout />;
+}
+
+function AuthGuard() {
+  const { isAuthenticated, user } = useAuth();
+  if (isAuthenticated) {
+    return <Navigate to={user?.role === "driver" ? "/driver" : "/user-dashboard"} replace />;
+  }
+  return <AuthPage />;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -51,8 +64,8 @@ const App = () => (
           <BrowserRouter>
             <Suspense fallback={<PageLoader />}>
               <Routes>
-                <Route path="/auth" element={<AuthPage />} />
-                <Route element={<AppLayout />}>
+                <Route path="/auth" element={<AuthGuard />} />
+                <Route element={<ProtectedLayout />}>
                   <Route path="/" element={<Index />} />
                   <Route path="/map" element={<MapPage />} />
                   <Route path="/analytics" element={<AnalyticsPage />} />
