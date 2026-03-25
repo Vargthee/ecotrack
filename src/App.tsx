@@ -9,7 +9,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import { FloatingChatbot } from "@/components/FloatingChatbot";
 
-const Index = lazy(() => import("./pages/Index"));
+const LandingPage = lazy(() => import("./pages/LandingPage"));
 const MapPage = lazy(() => import("./pages/MapPage"));
 const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
 const DriverPage = lazy(() => import("./pages/DriverPage"));
@@ -65,10 +65,10 @@ const App = () => (
           <BrowserRouter>
             <Suspense fallback={<PageLoader />}>
               <Routes>
+                <Route path="/" element={<LandingPage />} />
                 <Route path="/auth" element={<AuthGuard />} />
                 <Route path="/admin/login" element={<AdminLoginPage />} />
                 <Route element={<ProtectedLayout />}>
-                  <Route path="/" element={<Index />} />
                   <Route path="/map" element={<MapPage />} />
                   <Route path="/analytics" element={<AnalyticsPage />} />
                   <Route path="/driver" element={<DriverPage />} />
