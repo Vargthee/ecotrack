@@ -1,5 +1,9 @@
-import { DashboardOverview } from "@/components/DashboardOverview";
+import { Navigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
-const Index = () => <DashboardOverview />;
+const Index = () => {
+  const { user } = useAuth();
+  return <Navigate to={user?.role === "driver" ? "/driver" : "/user-dashboard"} replace />;
+};
 
 export default Index;

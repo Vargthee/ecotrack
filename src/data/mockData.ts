@@ -3,7 +3,7 @@ export interface WasteBin {
   location: string;
   lat: number;
   lng: number;
-  fillLevel: number; // 0-100
+  fillLevel: number;
   lastCollected: string;
   type: "general" | "recycling" | "organic";
 }
@@ -16,6 +16,8 @@ export interface DriverTask {
   priority: "high" | "medium" | "low";
   completed: boolean;
   estimatedTime: string;
+  wasteType: "general" | "recycling" | "organic";
+  earning: number;
 }
 
 export interface CitizenReport {
@@ -29,6 +31,12 @@ export interface CitizenReport {
   createdAt: string;
 }
 
+export interface DriverEarning {
+  day: string;
+  amount: number;
+  pickups: number;
+}
+
 export const wasteBins: WasteBin[] = [
   { id: "BIN-001", location: "Terminus Market, Jos", lat: 9.9167, lng: 8.8903, fillLevel: 85, lastCollected: "2026-03-14", type: "general" },
   { id: "BIN-002", location: "University of Jos Gate", lat: 9.9400, lng: 8.8800, fillLevel: 42, lastCollected: "2026-03-14", type: "recycling" },
@@ -39,26 +47,38 @@ export const wasteBins: WasteBin[] = [
   { id: "BIN-007", location: "Hill Station Junction, Jos", lat: 9.9300, lng: 8.9100, fillLevel: 55, lastCollected: "2026-03-14", type: "recycling" },
   { id: "BIN-008", location: "Bauchi Road, Jos", lat: 9.9350, lng: 8.9200, fillLevel: 78, lastCollected: "2026-03-13", type: "general" },
   { id: "BIN-009", location: "Hwolshe, Jos South", lat: 9.8200, lng: 8.8400, fillLevel: 12, lastCollected: "2026-03-15", type: "organic" },
-  { id: "BIN-010", location: "Plateau Specialist Hospital, Jos", lat: 9.9100, lng: 8.8750, fillLevel: 88, lastCollected: "2026-03-12", type: "general" },
+  { id: "BIN-010", location: "Plateau Specialist Hospital", lat: 9.9100, lng: 8.8750, fillLevel: 88, lastCollected: "2026-03-12", type: "general" },
 ];
 
 export const driverTasks: DriverTask[] = wasteBins
   .filter((b) => b.fillLevel > 70)
   .sort((a, b) => b.fillLevel - a.fillLevel)
-  .map((b) => ({
+  .map((b, i) => ({
     id: `TASK-${b.id}`,
     binId: b.id,
     location: b.location,
     fillLevel: b.fillLevel,
     priority: b.fillLevel > 85 ? "high" : "medium",
-    completed: false,
-    estimatedTime: `${Math.round(5 + Math.random() * 15)} min`,
+    completed: i >= 4,
+    estimatedTime: `${Math.round(5 + (i * 3))} min`,
+    wasteType: b.type,
+    earning: b.fillLevel > 85 ? 850 : 650,
   }));
 
 export const citizenReports: CitizenReport[] = [
-  { id: "RPT-001", type: "illegal_dumping", description: "Large pile of construction debris near park entrance", lat: 40.7135, lng: -74.005, status: "pending", createdAt: "2026-03-14T10:30:00" },
-  { id: "RPT-002", type: "overflowing_bin", description: "Bin overflowing near school, bad smell", lat: 40.7120, lng: -74.010, status: "in_progress", createdAt: "2026-03-14T14:15:00" },
-  { id: "RPT-003", type: "illegal_dumping", description: "Mattress and furniture dumped on sidewalk", lat: 40.7155, lng: -74.008, status: "resolved", createdAt: "2026-03-13T09:00:00" },
+  { id: "RPT-001", type: "illegal_dumping", description: "Large pile of construction debris near park entrance", lat: 9.916, lng: 8.892, status: "pending", createdAt: "2026-03-14T10:30:00" },
+  { id: "RPT-002", type: "overflowing_bin", description: "Bin overflowing near school, bad smell", lat: 9.921, lng: 8.895, status: "in_progress", createdAt: "2026-03-14T14:15:00" },
+  { id: "RPT-003", type: "illegal_dumping", description: "Mattress and furniture dumped on sidewalk", lat: 9.930, lng: 8.910, status: "resolved", createdAt: "2026-03-13T09:00:00" },
+];
+
+export const driverWeeklyEarnings: DriverEarning[] = [
+  { day: "Mon", amount: 4200, pickups: 6 },
+  { day: "Tue", amount: 5600, pickups: 8 },
+  { day: "Wed", amount: 3800, pickups: 5 },
+  { day: "Thu", amount: 6100, pickups: 9 },
+  { day: "Fri", amount: 5200, pickups: 7 },
+  { day: "Sat", amount: 2800, pickups: 4 },
+  { day: "Sun", amount: 0, pickups: 0 },
 ];
 
 export const analyticsData = {
