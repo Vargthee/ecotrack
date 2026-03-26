@@ -307,7 +307,7 @@ const LandingPage = () => {
                 { value: "12,000+", label: "Plateau Residents", sub: "across Jos LGA" },
                 { value: "840+", label: "Active Drivers", sub: "verified & onboarded" },
                 { value: "98%", label: "Collection Rate", sub: "on-time pickups" },
-                { value: "₦4.2M+", label: "Driver Earnings", sub: "paid out monthly" },
+                { value: "₦4.5M+", label: "Driver Earnings", sub: "paid out monthly" },
               ].map((s) => (
                 <div key={s.label} className="space-y-0.5">
                   <p className="text-2xl sm:text-3xl font-extrabold text-primary" data-testid={`stat-${s.label.toLowerCase().replace(/\s+/g, "-")}`}>
@@ -452,8 +452,8 @@ const LandingPage = () => {
                 </div>
                 <div className="bg-primary-foreground/10 rounded-xl p-4 space-y-1">
                   <p className="text-xs text-primary-foreground/60 font-medium">Average driver earns</p>
-                  <p className="text-2xl font-extrabold">₦85,000 <span className="text-base font-normal text-primary-foreground/70">/ month</span></p>
-                  <p className="text-xs text-primary-foreground/60">based on 20 tasks/week in Jos</p>
+                  <p className="text-2xl font-extrabold">₦75,000 <span className="text-base font-normal text-primary-foreground/70">/ month</span></p>
+                  <p className="text-xs text-primary-foreground/60">based on 25 tasks/week in Jos</p>
                 </div>
                 <ul className="space-y-2.5 text-sm text-primary-foreground/80">
                   {["Accept tasks near your location", "Real-time navigation to pickups", "Weekly earnings & bonus tracker", "Verified badge builds trust"].map((f) => (
@@ -551,7 +551,7 @@ const LandingPage = () => {
               {
                 name: "Emeka Okafor", location: "Bukuru, Jos South", role: "Driver · 3 months",
                 initials: "EO", rating: 5,
-                quote: "I was just driving without direction before. Now I open the app, see jobs near me, and I made over ₦90,000 last month just doing pickups in the morning.",
+                quote: "I was just driving without direction before. Now I open the app, see jobs near me, and I made over ₦72,000 last month just doing pickups in the morning.",
               },
               {
                 name: "Hajiya Fatima", location: "Dadin Kowa, Jos North", role: "Resident",
@@ -628,7 +628,7 @@ const LandingPage = () => {
                 <div className="space-y-4">
                   <Badge className="bg-primary-foreground/15 text-primary-foreground border-0 text-xs">For Plateau Drivers</Badge>
                   <h2 className="text-2xl sm:text-3xl font-extrabold leading-tight">
-                    Turn your truck into a ₦85,000/month income
+                    Turn your truck into a ₦75,000/month income
                   </h2>
                   <p className="text-primary-foreground/80 text-sm leading-relaxed">
                     Plateau State waste drivers on EcoTrack complete an average of 20 tasks per week — earning real Naira paid directly to them.
@@ -644,10 +644,10 @@ const LandingPage = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    { label: "Avg. per task", value: "₦1,200" },
-                    { label: "Tasks/week", value: "~20" },
-                    { label: "Monthly take-home", value: "₦85k+" },
-                    { label: "Bonus on 30+ tasks", value: "₦5,000" },
+                    { label: "Avg. per task", value: "₦750" },
+                    { label: "Tasks/week", value: "~25" },
+                    { label: "Monthly take-home", value: "₦75k+" },
+                    { label: "Bonus on 30+ tasks", value: "₦3,000" },
                   ].map((s) => (
                     <div key={s.label} className="bg-primary-foreground/10 rounded-2xl p-4 space-y-1">
                       <p className="text-lg sm:text-xl font-extrabold">{s.value}</p>

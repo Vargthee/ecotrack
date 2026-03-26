@@ -30,8 +30,8 @@ export const PLAN_CONFIG: Record<PlanTier, { name: string; description: string; 
   basic: {
     name: "Basic",
     description: "Residential & Small Business",
-    monthlyPrice: 5000,
-    yearlyPrice: 48000,
+    monthlyPrice: 2500,
+    yearlyPrice: 24000,
     features: {
       maxBins: 1,
       routeOptimization: false,
@@ -50,8 +50,8 @@ export const PLAN_CONFIG: Record<PlanTier, { name: string; description: string; 
   pro: {
     name: "Professional",
     description: "Industrial & Commercial",
-    monthlyPrice: 25000,
-    yearlyPrice: 240000,
+    monthlyPrice: 15000,
+    yearlyPrice: 144000,
     features: {
       maxBins: 10,
       routeOptimization: true,
@@ -70,8 +70,8 @@ export const PLAN_CONFIG: Record<PlanTier, { name: string; description: string; 
   enterprise: {
     name: "Enterprise",
     description: "Municipal & City-wide",
-    monthlyPrice: 150000,
-    yearlyPrice: 1440000,
+    monthlyPrice: 85000,
+    yearlyPrice: 816000,
     features: {
       maxBins: "unlimited",
       routeOptimization: true,

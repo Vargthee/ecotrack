@@ -62,7 +62,7 @@ export const driverTasks: DriverTask[] = wasteBins
     completed: i >= 4,
     estimatedTime: `${Math.round(5 + (i * 3))} min`,
     wasteType: b.type,
-    earning: b.fillLevel > 85 ? 850 : 650,
+    earning: b.fillLevel > 85 ? 800 : 600,
   }));
 
 export const citizenReports: CitizenReport[] = [
@@ -74,10 +74,10 @@ export const citizenReports: CitizenReport[] = [
 export const driverWeeklyEarnings: DriverEarning[] = [
   { day: "Mon", amount: 4200, pickups: 6 },
   { day: "Tue", amount: 5600, pickups: 8 },
-  { day: "Wed", amount: 3800, pickups: 5 },
-  { day: "Thu", amount: 6100, pickups: 9 },
-  { day: "Fri", amount: 5200, pickups: 7 },
-  { day: "Sat", amount: 2800, pickups: 4 },
+  { day: "Wed", amount: 3600, pickups: 5 },
+  { day: "Thu", amount: 6000, pickups: 9 },
+  { day: "Fri", amount: 4800, pickups: 7 },
+  { day: "Sat", amount: 2600, pickups: 4 },
   { day: "Sun", amount: 0, pickups: 0 },
 ];
 

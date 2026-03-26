@@ -50,12 +50,12 @@ export const adminDrivers: AdminDriver[] = [
 ];
 
 export const subscribers: Subscriber[] = [
-  { id: "SUB-001", name: "Amina Bello", email: "amina@example.com", plan: "basic", status: "active", startedAt: "2026-01-01", amountNgn: 5000, nextBilling: "2026-04-01" },
-  { id: "SUB-002", name: "Grace Okonkwo", email: "grace@example.com", plan: "pro", status: "active", startedAt: "2026-02-01", amountNgn: 25000, nextBilling: "2026-04-01" },
-  { id: "SUB-003", name: "Emeka Nwosu", email: "emeka@example.com", plan: "enterprise", status: "active", startedAt: "2026-03-01", amountNgn: 150000, nextBilling: "2026-04-01" },
-  { id: "SUB-004", name: "Ibrahim Musa", email: "ibrahim@example.com", plan: "basic", status: "past_due", startedAt: "2025-12-15", amountNgn: 5000, nextBilling: "2026-03-15" },
-  { id: "SUB-005", name: "Hauwa Sani", email: "hauwa@example.com", plan: "pro", status: "canceled", startedAt: "2025-11-01", amountNgn: 25000, nextBilling: "—" },
-  { id: "SUB-006", name: "Plateau State Govt", email: "plateau@gov.ng", plan: "enterprise", status: "active", startedAt: "2025-09-01", amountNgn: 150000, nextBilling: "2026-04-01" },
+  { id: "SUB-001", name: "Amina Bello", email: "amina@example.com", plan: "basic", status: "active", startedAt: "2026-01-01", amountNgn: 2500, nextBilling: "2026-04-01" },
+  { id: "SUB-002", name: "Grace Okonkwo", email: "grace@example.com", plan: "pro", status: "active", startedAt: "2026-02-01", amountNgn: 15000, nextBilling: "2026-04-01" },
+  { id: "SUB-003", name: "Emeka Nwosu", email: "emeka@example.com", plan: "enterprise", status: "active", startedAt: "2026-03-01", amountNgn: 85000, nextBilling: "2026-04-01" },
+  { id: "SUB-004", name: "Ibrahim Musa", email: "ibrahim@example.com", plan: "basic", status: "past_due", startedAt: "2025-12-15", amountNgn: 2500, nextBilling: "2026-03-15" },
+  { id: "SUB-005", name: "Hauwa Sani", email: "hauwa@example.com", plan: "pro", status: "canceled", startedAt: "2025-11-01", amountNgn: 15000, nextBilling: "—" },
+  { id: "SUB-006", name: "Plateau State Govt", email: "plateau@gov.ng", plan: "enterprise", status: "active", startedAt: "2025-09-01", amountNgn: 85000, nextBilling: "2026-04-01" },
 ];
 
 export const adminStats = {
@@ -65,7 +65,7 @@ export const adminStats = {
   driversOnDuty: 2,
   totalSubscribers: 6,
   activeSubscribers: 4,
-  monthlyRevenue: 360000,
+  monthlyRevenue: 487500,
   totalBins: 10,
   pendingReports: 1,
 };

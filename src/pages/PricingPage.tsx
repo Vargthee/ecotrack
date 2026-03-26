@@ -10,8 +10,8 @@ import { toast } from "@/hooks/use-toast";
 
 const tierIcons = { basic: Zap, pro: Building2, enterprise: Globe };
 
-function formatNaira(kobo: number) {
-  return `₦${(kobo / 100).toLocaleString("en-NG")}`;
+function formatNaira(naira: number) {
+  return `₦${naira.toLocaleString("en-NG")}`;
 }
 
 const featureRows: { label: string; key: string; basic: string; pro: string; enterprise: string }[] = [

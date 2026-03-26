@@ -58,12 +58,12 @@ const binFillColors: Record<string, string> = {
 };
 
 const revenueData = [
-  { month: "Oct", revenue: 210000 },
-  { month: "Nov", revenue: 265000 },
-  { month: "Dec", revenue: 298000 },
-  { month: "Jan", revenue: 315000 },
-  { month: "Feb", revenue: 340000 },
-  { month: "Mar", revenue: 360000 },
+  { month: "Oct", revenue: 187500 },
+  { month: "Nov", revenue: 242500 },
+  { month: "Dec", revenue: 310000 },
+  { month: "Jan", revenue: 365000 },
+  { month: "Feb", revenue: 427500 },
+  { month: "Mar", revenue: 487500 },
 ];
 
 const AdminPage = () => {
