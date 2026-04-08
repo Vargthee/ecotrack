@@ -7,14 +7,14 @@ import { useNavigate } from "react-router-dom";
 import { CreditCard, Calendar, Receipt, ArrowUpRight, Shield } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
-function formatNaira(kobo: number) {
-  return `₦${(kobo / 100).toLocaleString("en-NG")}`;
+function formatNaira(naira: number) {
+  return `₦${naira.toLocaleString("en-NG")}`;
 }
 
 const mockInvoices = [
-  { id: "INV-003", date: "2026-03-01", amount: 25000, status: "paid" },
-  { id: "INV-002", date: "2026-02-01", amount: 25000, status: "paid" },
-  { id: "INV-001", date: "2026-01-01", amount: 5000, status: "paid" },
+  { id: "INV-003", date: "2026-03-01", amount: 15000, status: "paid" },
+  { id: "INV-002", date: "2026-02-01", amount: 15000, status: "paid" },
+  { id: "INV-001", date: "2026-01-01", amount: 2500, status: "paid" },
 ];
 
 export default function BillingPage() {

@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Leaf, Star, Gift, Zap, Trophy, TrendingUp, Recycle, ShieldCheck } from "lucide-react";
+import { toast } from "sonner";
 
 const activityLog = [
   { id: "a1", action: "Completed pickup", points: 20, date: "Today, 2:30 PM" },
@@ -27,9 +29,16 @@ const badges = [
 ];
 
 const EcoPointsPage = () => {
-  const currentPoints = 280;
+  const [currentPoints, setCurrentPoints] = useState(280);
   const nextReward = 500;
   const totalEarned = 680;
+
+  const handleRedeem = (reward: { name: string; cost: number }) => {
+    setCurrentPoints((p) => p - reward.cost);
+    toast.success(`Redeemed: ${reward.name}`, {
+      description: `${reward.cost} eco points used. Benefit applied to your account.`,
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -113,7 +122,13 @@ const EcoPointsPage = () => {
                   <p className="text-sm font-medium text-foreground">{reward.name}</p>
                   <p className="text-xs text-muted-foreground">{reward.description}</p>
                 </div>
-                <Button size="sm" variant={currentPoints >= reward.cost ? "default" : "outline"} disabled={currentPoints < reward.cost} className="shrink-0">
+                <Button
+                  size="sm"
+                  variant={currentPoints >= reward.cost ? "default" : "outline"}
+                  disabled={currentPoints < reward.cost}
+                  className="shrink-0"
+                  onClick={() => handleRedeem(reward)}
+                >
                   {reward.cost} pts
                 </Button>
               </div>
