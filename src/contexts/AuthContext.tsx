@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 
 export type UserRole = "user" | "driver" | "admin";
 
@@ -9,12 +9,13 @@ export interface AuthUser {
   role: UserRole;
   avatar?: string;
   phone?: string;
-  joinedAt: string;
+  joinedAt?: string;
 }
 
 interface AuthContextValue {
   user: AuthUser | null;
   isAuthenticated: boolean;
+  isLoading: boolean;
   login: (email: string, password: string, role: UserRole) => Promise<boolean>;
   register: (name: string, email: string, password: string, role: UserRole) => Promise<boolean>;
   logout: () => void;
@@ -22,76 +23,76 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const MOCK_USERS: Record<string, { password: string; user: AuthUser }> = {
-  "user@ecotrack.com": {
-    password: "user123",
-    user: { id: "u1", name: "Adewale Johnson", email: "user@ecotrack.com", role: "user", joinedAt: "2026-01-15" },
-  },
-  "driver@ecotrack.com": {
-    password: "driver123",
-    user: { id: "d1", name: "Ibrahim Musa", email: "driver@ecotrack.com", role: "driver", joinedAt: "2025-11-20" },
-  },
-  "admin@ecotrack.com": {
-    password: "admin123",
-    user: { id: "a1", name: "Fatima Yusuf", email: "admin@ecotrack.com", role: "admin", joinedAt: "2025-08-20" },
-  },
-};
+async function apiPost(path: string, body: unknown) {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Request failed");
+  return json;
+}
 
-function getStoredUser(): AuthUser | null {
-  try {
-    const stored = sessionStorage.getItem("ecotrack_user");
-    if (stored) return JSON.parse(stored);
-  } catch {}
-  return null;
+function mapApiUser(data: { id: number; name: string; email: string; role: UserRole; phone?: string }): AuthUser {
+  return {
+    id: String(data.id),
+    name: data.name,
+    email: data.email,
+    role: data.role,
+    phone: data.phone,
+    joinedAt: new Date().toISOString().split("T")[0],
+  };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(getStoredUser);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const login = useCallback(async (email: string, _password: string, role: UserRole): Promise<boolean> => {
-    await new Promise((r) => setTimeout(r, 500));
-    const entry = MOCK_USERS[email];
-    if (entry && entry.password === _password && entry.user.role === role) {
-      sessionStorage.setItem("ecotrack_user", JSON.stringify(entry.user));
-      setUser(entry.user);
+  // Restore session from cookie on mount
+  useEffect(() => {
+    fetch("/api/auth/me", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data) setUser(mapApiUser(data)); })
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  const login = useCallback(async (email: string, password: string, role: UserRole): Promise<boolean> => {
+    try {
+      const data = await apiPost("/api/auth/login", { email, password });
+      if (data.role !== role) {
+        // Wrong role — logout from server and reject
+        await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+        return false;
+      }
+      setUser(mapApiUser(data));
       return true;
+    } catch {
+      return false;
     }
-    if (role === "admin") return false;
-    const mockUser: AuthUser = {
-      id: `mock_${Date.now()}`,
-      name: email.split("@")[0],
-      email,
-      role,
-      joinedAt: new Date().toISOString().split("T")[0],
-    };
-    sessionStorage.setItem("ecotrack_user", JSON.stringify(mockUser));
-    setUser(mockUser);
-    return true;
   }, []);
 
-  const register = useCallback(async (name: string, email: string, _password: string, role: UserRole): Promise<boolean> => {
+  const register = useCallback(async (name: string, email: string, password: string, role: UserRole): Promise<boolean> => {
     if (role === "admin") return false;
-    await new Promise((r) => setTimeout(r, 500));
-    const newUser: AuthUser = {
-      id: `mock_${Date.now()}`,
-      name,
-      email,
-      role,
-      joinedAt: new Date().toISOString().split("T")[0],
-    };
-    sessionStorage.setItem("ecotrack_user", JSON.stringify(newUser));
-    setUser(newUser);
-    return true;
+    try {
+      const data = await apiPost("/api/auth/register", { name, email, password, role });
+      setUser(mapApiUser(data));
+      return true;
+    } catch {
+      return false;
+    }
   }, []);
 
-  const logout = useCallback(() => {
-    sessionStorage.removeItem("ecotrack_user");
+  const logout = useCallback(async () => {
+    await fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
     sessionStorage.removeItem("ecotrack_admin_auth");
     setUser(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, register, logout }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

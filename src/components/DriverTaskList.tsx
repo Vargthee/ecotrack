@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { driverTasks, driverWeeklyEarnings, type DriverTask } from "@/data/mockData";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { BinStatusBadge } from "./BinStatusBadge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,25 +24,58 @@ function getGreeting() {
 const RATE_PER_KM = 120;
 const SHIFT_KM = 34.2;
 
+const weeklyData = [
+  { day: "Mon", amount: 4200 },
+  { day: "Tue", amount: 5600 },
+  { day: "Wed", amount: 3600 },
+  { day: "Thu", amount: 6000 },
+  { day: "Fri", amount: 4800 },
+  { day: "Sat", amount: 2600 },
+];
+
+type Task = {
+  id: string;
+  binId: string;
+  location: string;
+  fillLevel: number;
+  priority: "high" | "medium" | "low";
+  completed: boolean;
+  estimatedTime: string;
+  wasteType: string;
+  earning: number;
+};
+
 export function DriverTaskList() {
   const { user } = useAuth();
-  const [tasks, setTasks] = useState<DriverTask[]>(driverTasks);
-  const [shiftActive, setShiftActive] = useState(true);
 
-  const toggleTask = (id: string) => {
-    setTasks((prev) =>
-      prev.map((t) => {
-        if (t.id !== id) return t;
-        const next = { ...t, completed: !t.completed };
-        if (next.completed) {
-          toast.success(`Pickup complete — +₦${next.earning.toLocaleString()} earned`, {
-            description: next.location,
-          });
-        }
-        return next;
-      })
-    );
+  const { data: tasks = [], isLoading } = useQuery<Task[]>({
+    queryKey: ["/api/tasks"],
+  });
+
+  const completeMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("PATCH", `/api/tasks/${id}/complete`),
+    onSuccess: (_, id) => {
+      const task = tasks.find((t) => t.id === id);
+      if (task) toast.success(`Pickup complete — +₦${task.earning.toLocaleString()} earned`, { description: task.location });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/eco-points"] });
+    },
+  });
+
+  const uncompleteMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("PATCH", `/api/tasks/${id}/uncomplete`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/tasks"] }),
+  });
+
+  const toggleTask = (task: Task) => {
+    if (task.completed) {
+      uncompleteMutation.mutate(task.id);
+    } else {
+      completeMutation.mutate(task.id);
+    }
   };
+
+  const [shiftActive, setShiftActive] = useState(true);
 
   const completedTasks = tasks.filter((t) => t.completed);
   const pendingTasks = tasks.filter((t) => !t.completed);
@@ -59,11 +93,11 @@ export function DriverTaskList() {
     general: "General",
     recycling: "Recycling",
     organic: "Organic",
+    ewaste: "E-Waste",
   };
 
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
-      {/* Header */}
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">
@@ -93,37 +127,12 @@ export function DriverTaskList() {
         </Button>
       </div>
 
-      {/* Today's Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          {
-            label: "Today's Earnings",
-            value: `₦${todayEarnings.toLocaleString()}`,
-            sub: `of ₦${totalPossible.toLocaleString()} possible`,
-            icon: Banknote,
-            color: "text-success",
-          },
-          {
-            label: "Pickups Done",
-            value: `${completedTasks.length}/${tasks.length}`,
-            sub: `${pendingTasks.length} remaining`,
-            icon: Truck,
-            color: "text-primary",
-          },
-          {
-            label: "Distance",
-            value: `${SHIFT_KM} km`,
-            sub: `₦${RATE_PER_KM}/km rate`,
-            icon: Navigation,
-            color: "text-primary",
-          },
-          {
-            label: "Performance",
-            value: `${Math.round(progress)}%`,
-            sub: "route completion",
-            icon: TrendingUp,
-            color: "text-warning",
-          },
+          { label: "Today's Earnings", value: `₦${todayEarnings.toLocaleString()}`, sub: `of ₦${totalPossible.toLocaleString()} possible`, icon: Banknote, color: "text-success" },
+          { label: "Pickups Done", value: `${completedTasks.length}/${tasks.length}`, sub: `${pendingTasks.length} remaining`, icon: Truck, color: "text-primary" },
+          { label: "Distance", value: `${SHIFT_KM} km`, sub: `₦${RATE_PER_KM}/km rate`, icon: Navigation, color: "text-primary" },
+          { label: "Performance", value: `${Math.round(progress)}%`, sub: "route completion", icon: TrendingUp, color: "text-warning" },
         ].map((stat) => (
           <Card key={stat.label}>
             <CardContent className="p-4">
@@ -136,7 +145,6 @@ export function DriverTaskList() {
         ))}
       </div>
 
-      {/* Route Progress */}
       <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-accent/10">
         <CardContent className="p-5">
           <div className="flex items-center justify-between mb-3">
@@ -146,96 +154,76 @@ export function DriverTaskList() {
               </div>
               <div>
                 <p className="text-sm font-semibold text-foreground">Route Progress</p>
-                <p className="text-xs text-muted-foreground">
-                  {completedTasks.length} of {tasks.length} pickups completed today
-                </p>
+                <p className="text-xs text-muted-foreground">{completedTasks.length} of {tasks.length} pickups completed today</p>
               </div>
             </div>
-            <div className="text-right">
-              <span className="text-3xl font-bold font-mono text-primary">{Math.round(progress)}%</span>
-            </div>
+            <span className="text-3xl font-bold font-mono text-primary">{Math.round(progress)}%</span>
           </div>
           <div className="h-3 w-full overflow-hidden rounded-full bg-primary/10">
-            <div
-              className="h-full rounded-full bg-primary transition-all duration-700 ease-out"
-              style={{ width: `${progress}%` }}
-            />
+            <div className="h-full rounded-full bg-primary transition-all duration-700 ease-out" style={{ width: `${progress}%` }} />
           </div>
           {progress === 100 && (
             <div className="mt-3 flex items-center gap-2 text-xs text-success font-medium">
-              <Star className="h-3.5 w-3.5" />
-              All pickups complete — excellent work!
+              <Star className="h-3.5 w-3.5" /> All pickups complete — excellent work!
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Task List */}
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-base font-semibold text-foreground">Today's Pickups</h2>
-          <Badge variant="outline" className="text-[10px]">
-            {pendingTasks.length} pending
-          </Badge>
+          <Badge variant="outline" className="text-[10px]">{pendingTasks.length} pending</Badge>
         </div>
-        <div className="space-y-2">
-          {tasks.map((task, i) => (
-            <Card
-              key={task.id}
-              className={cn(
-                "transition-all cursor-pointer hover:shadow-md border",
-                task.completed && "opacity-55",
-                !task.completed && task.priority === "high" && "border-destructive/20"
-              )}
-              onClick={() => toggleTask(task.id)}
-              data-testid={`card-task-${task.id}`}
-            >
-              <CardContent className="flex items-center gap-3 p-4">
-                <div className="shrink-0">
-                  {task.completed ? (
-                    <CheckCircle2 className="h-6 w-6 text-success" />
-                  ) : (
-                    <Circle className="h-6 w-6 text-muted-foreground" />
-                  )}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] font-mono text-muted-foreground">#{i + 1}</span>
-                    <p className={cn("text-sm font-medium text-foreground", task.completed && "line-through text-muted-foreground")}>
-                      {task.location}
-                    </p>
-                    {!task.completed && task.priority === "high" && (
-                      <Flame className="h-3.5 w-3.5 text-destructive shrink-0" />
-                    )}
+        {isLoading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => <div key={i} className="h-20 rounded-xl bg-muted/40 animate-pulse" />)}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {tasks.map((task, i) => (
+              <Card
+                key={task.id}
+                className={cn(
+                  "transition-all cursor-pointer hover:shadow-md border",
+                  task.completed && "opacity-55",
+                  !task.completed && task.priority === "high" && "border-destructive/20"
+                )}
+                onClick={() => toggleTask(task)}
+                data-testid={`card-task-${task.id}`}
+              >
+                <CardContent className="flex items-center gap-3 p-4">
+                  <div className="shrink-0">
+                    {task.completed
+                      ? <CheckCircle2 className="h-6 w-6 text-success" />
+                      : <Circle className="h-6 w-6 text-muted-foreground" />}
                   </div>
-                  <div className="mt-1 flex items-center gap-3 text-[10px] text-muted-foreground flex-wrap">
-                    <span className="flex items-center gap-1">
-                      <MapPin className="h-3 w-3" /> {task.binId}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" /> {task.estimatedTime}
-                    </span>
-                    <span className="capitalize">{wasteTypeLabel[task.wasteType] ?? task.wasteType}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-mono text-muted-foreground">#{i + 1}</span>
+                      <p className={cn("text-sm font-medium text-foreground", task.completed && "line-through text-muted-foreground")}>
+                        {task.location}
+                      </p>
+                      {!task.completed && task.priority === "high" && <Flame className="h-3.5 w-3.5 text-destructive shrink-0" />}
+                    </div>
+                    <div className="mt-1 flex items-center gap-3 text-[10px] text-muted-foreground flex-wrap">
+                      <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {task.binId}</span>
+                      <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {task.estimatedTime}</span>
+                      <span className="capitalize">{wasteTypeLabel[task.wasteType] ?? task.wasteType}</span>
+                    </div>
                   </div>
-                </div>
-
-                <div className="flex flex-col items-end gap-1.5 shrink-0">
-                  <BinStatusBadge fillLevel={task.fillLevel} size="sm" />
-                  <Badge variant="outline" className={`text-[9px] px-1.5 ${priorityColor[task.priority]}`}>
-                    {task.priority}
-                  </Badge>
-                  <span className="text-[10px] font-mono text-success font-semibold">
-                    ₦{task.earning.toLocaleString()}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    <BinStatusBadge fillLevel={task.fillLevel} size="sm" />
+                    <Badge variant="outline" className={`text-[9px] px-1.5 ${priorityColor[task.priority]}`}>{task.priority}</Badge>
+                    <span className="text-[10px] font-mono text-success font-semibold">₦{task.earning.toLocaleString()}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Weekly Earnings Chart */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
@@ -244,15 +232,10 @@ export function DriverTaskList() {
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={driverWeeklyEarnings}>
+            <BarChart data={weeklyData}>
               <XAxis dataKey="day" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
               <Tooltip
-                contentStyle={{
-                  backgroundColor: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: "8px",
-                  fontSize: "12px",
-                }}
+                contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }}
                 formatter={(v: number) => [`₦${v.toLocaleString()}`, "Earnings"]}
               />
               <Bar dataKey="amount" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
@@ -260,9 +243,7 @@ export function DriverTaskList() {
           </ResponsiveContainer>
           <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground px-1">
             <span>This week total</span>
-            <span className="font-semibold text-foreground font-mono">
-              ₦{driverWeeklyEarnings.reduce((s, d) => s + d.amount, 0).toLocaleString()}
-            </span>
+            <span className="font-semibold text-foreground font-mono">₦{weeklyData.reduce((s, d) => s + d.amount, 0).toLocaleString()}</span>
           </div>
         </CardContent>
       </Card>

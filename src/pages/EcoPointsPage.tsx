@@ -1,18 +1,12 @@
-import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Leaf, Star, Gift, Zap, Trophy, TrendingUp, Recycle, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
-
-const activityLog = [
-  { id: "a1", action: "Completed pickup", points: 20, date: "Today, 2:30 PM" },
-  { id: "a2", action: "Recycled e-waste", points: 35, date: "Yesterday, 11:00 AM" },
-  { id: "a3", action: "Reported illegal dump", points: 15, date: "Mar 19, 9:45 AM" },
-  { id: "a4", action: "Completed pickup", points: 20, date: "Mar 15, 3:15 PM" },
-  { id: "a5", action: "Organic composting", points: 25, date: "Mar 10, 10:00 AM" },
-];
+import { format } from "date-fns";
 
 const rewards = [
   { id: "r1", name: "Free Pickup", cost: 500, icon: Recycle, description: "Redeem for one free pickup" },
@@ -28,17 +22,42 @@ const badges = [
   { name: "Planet Saver", earned: false, icon: Star },
 ];
 
+type PointsData = { balance: number; log: { id: number; action: string; points: number; createdAt: string }[] };
+
 const EcoPointsPage = () => {
-  const [currentPoints, setCurrentPoints] = useState(280);
+  const { data, isLoading } = useQuery<PointsData>({
+    queryKey: ["/api/eco-points"],
+  });
+
+  const currentPoints = data?.balance ?? 0;
+  const totalEarned = data?.log.reduce((s, e) => s + (e.points > 0 ? e.points : 0), 0) ?? 0;
   const nextReward = 500;
-  const totalEarned = 680;
+
+  const redeemMutation = useMutation({
+    mutationFn: ({ rewardName, cost }: { rewardName: string; cost: number }) =>
+      apiRequest("POST", "/api/eco-points/redeem", { rewardName, cost }),
+    onSuccess: (_data, vars) => {
+      toast.success(`Redeemed: ${vars.rewardName}`, {
+        description: `${vars.cost} eco points used. Benefit applied to your account.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/eco-points"] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Redemption failed");
+    },
+  });
 
   const handleRedeem = (reward: { name: string; cost: number }) => {
-    setCurrentPoints((p) => p - reward.cost);
-    toast.success(`Redeemed: ${reward.name}`, {
-      description: `${reward.cost} eco points used. Benefit applied to your account.`,
-    });
+    redeemMutation.mutate({ rewardName: reward.name, cost: reward.cost });
   };
+
+  function formatDate(str: string) {
+    try {
+      return format(new Date(str), "MMM d, h:mm a");
+    } catch {
+      return str;
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -47,14 +66,17 @@ const EcoPointsPage = () => {
         <p className="text-sm text-muted-foreground">Earn points for every eco-friendly action</p>
       </div>
 
-      {/* Points Balance */}
       <Card className="bg-gradient-to-br from-primary/10 via-accent/20 to-primary/5 border-primary/20">
         <CardContent className="p-6">
           <div className="text-center space-y-2">
             <div className="mx-auto w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center">
               <Leaf className="h-8 w-8 text-primary" />
             </div>
-            <p className="text-5xl font-bold text-foreground">{currentPoints}</p>
+            {isLoading ? (
+              <div className="h-12 w-24 mx-auto bg-muted/40 rounded animate-pulse" />
+            ) : (
+              <p className="text-5xl font-bold text-foreground" data-testid="text-eco-points">{currentPoints}</p>
+            )}
             <p className="text-sm text-muted-foreground">Available Points</p>
             <Badge className="bg-primary/20 text-primary border-0">
               <TrendingUp className="h-3 w-3 mr-1" /> {totalEarned} total earned
@@ -63,14 +85,13 @@ const EcoPointsPage = () => {
           <div className="mt-6">
             <div className="flex justify-between text-xs text-muted-foreground mb-1">
               <span>{currentPoints} / {nextReward} to next reward</span>
-              <span>{Math.round((currentPoints / nextReward) * 100)}%</span>
+              <span>{Math.min(Math.round((currentPoints / nextReward) * 100), 100)}%</span>
             </div>
-            <Progress value={(currentPoints / nextReward) * 100} className="h-3" />
+            <Progress value={Math.min((currentPoints / nextReward) * 100, 100)} className="h-3" />
           </div>
         </CardContent>
       </Card>
 
-      {/* Badges */}
       <div>
         <h2 className="text-lg font-semibold text-foreground mb-3">Badges</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -87,26 +108,34 @@ const EcoPointsPage = () => {
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
-        {/* Activity */}
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Recent Activity</CardTitle>
             <CardDescription>Your eco-friendly actions</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {activityLog.map((activity) => (
-              <div key={activity.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/30">
-                <div>
-                  <p className="text-sm font-medium text-foreground">{activity.action}</p>
-                  <p className="text-xs text-muted-foreground">{activity.date}</p>
-                </div>
-                <Badge className="bg-primary/10 text-primary border-0 font-mono">+{activity.points}</Badge>
+            {isLoading ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map((i) => <div key={i} className="h-10 rounded bg-muted/40 animate-pulse" />)}
               </div>
-            ))}
+            ) : data?.log.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">No activity yet — request a pickup to earn points!</p>
+            ) : (
+              data?.log.map((entry) => (
+                <div key={entry.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/30">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{entry.action}</p>
+                    <p className="text-xs text-muted-foreground">{formatDate(entry.createdAt)}</p>
+                  </div>
+                  <Badge className={entry.points >= 0 ? "bg-primary/10 text-primary border-0 font-mono" : "bg-destructive/10 text-destructive border-0 font-mono"}>
+                    {entry.points >= 0 ? "+" : ""}{entry.points}
+                  </Badge>
+                </div>
+              ))
+            )}
           </CardContent>
         </Card>
 
-        {/* Rewards */}
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Redeem Rewards</CardTitle>
@@ -125,8 +154,9 @@ const EcoPointsPage = () => {
                 <Button
                   size="sm"
                   variant={currentPoints >= reward.cost ? "default" : "outline"}
-                  disabled={currentPoints < reward.cost}
+                  disabled={currentPoints < reward.cost || redeemMutation.isPending}
                   className="shrink-0"
+                  data-testid={`button-redeem-${reward.id}`}
                   onClick={() => handleRedeem(reward)}
                 >
                   {reward.cost} pts

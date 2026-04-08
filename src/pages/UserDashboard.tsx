@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,21 +12,17 @@ import {
   MapPin, Clock, ChevronRight, Zap, TriangleAlert
 } from "lucide-react";
 import { toast } from "sonner";
-import { wasteBins, getBinStatus } from "@/data/mockData";
 import { useNavigate } from "react-router-dom";
 import { BinStatusBadge } from "@/components/BinStatusBadge";
 
-const mockPickupHistory = [
-  { id: "p1", date: "Mar 20, 2026", type: "General Waste", status: "completed" as const, ecoPoints: 20, driver: "Ibrahim M." },
-  { id: "p2", date: "Mar 15, 2026", type: "Recyclables", status: "completed" as const, ecoPoints: 35, driver: "Chukwu O." },
-  { id: "p3", date: "Mar 10, 2026", type: "Organic Waste", status: "completed" as const, ecoPoints: 25, driver: "Musa A." },
-  { id: "p4", date: "Mar 25, 2026", type: "E-Waste", status: "scheduled" as const, ecoPoints: 0, driver: "—" },
-];
+type Bin = { id: string; location: string; fillLevel: number; type: string };
+type Pickup = { id: number; wasteType: string; status: string; createdAt: string };
+type PointsData = { balance: number; log: { id: number; action: string; points: number }[] };
 
 const mockNotifications = [
-  { id: "n1", message: "Your pickup is on the way!", time: "2 min ago", read: false, type: "pickup" },
-  { id: "n2", message: "You earned 20 eco points!", time: "1 hour ago", read: false, type: "points" },
-  { id: "n3", message: "Weekly eco report is ready", time: "1 day ago", read: true, type: "info" },
+  { id: "n1", message: "Your pickup is on the way!", time: "2 min ago", read: false },
+  { id: "n2", message: "You earned eco points!", time: "1 hour ago", read: false },
+  { id: "n3", message: "Weekly eco report is ready", time: "1 day ago", read: true },
 ];
 
 const wasteTypes = [
@@ -33,6 +31,12 @@ const wasteTypes = [
   { id: "organic", label: "Organic", icon: Leaf, color: "bg-success/10" },
   { id: "ewaste", label: "E-Waste", icon: Zap, color: "bg-warning/10" },
 ];
+
+function getBinStatus(fillLevel: number) {
+  if (fillLevel >= 80) return "red";
+  if (fillLevel >= 50) return "yellow";
+  return "green";
+}
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -46,21 +50,30 @@ const UserDashboard = () => {
   const navigate = useNavigate();
   const [showNotifications, setShowNotifications] = useState(false);
   const [selectedWasteType, setSelectedWasteType] = useState("general");
-  const [requesting, setRequesting] = useState(false);
-
-  const ecoPoints = 280;
-  const nextReward = 500;
-  const nearbyBins = wasteBins.slice(0, 3);
   const unreadCount = mockNotifications.filter((n) => !n.read).length;
 
-  const handleRequestPickup = async () => {
-    setRequesting(true);
-    await new Promise((r) => setTimeout(r, 1200));
-    setRequesting(false);
-    toast.success("Pickup request submitted!", {
-      description: `A driver will be assigned for your ${selectedWasteType} pickup shortly.`,
-    });
-  };
+  const { data: binsData = [] } = useQuery<Bin[]>({ queryKey: ["/api/bins"] });
+  const { data: pickupsData = [] } = useQuery<Pickup[]>({ queryKey: ["/api/pickups"] });
+  const { data: pointsData } = useQuery<PointsData>({ queryKey: ["/api/eco-points"] });
+
+  const ecoPoints = pointsData?.balance ?? 0;
+  const nextReward = 500;
+  const nearbyBins = binsData.slice(0, 3);
+
+  const pickupMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/pickups", { wasteType: selectedWasteType }),
+    onSuccess: () => {
+      toast.success("Pickup request submitted!", {
+        description: `A driver will be assigned for your ${selectedWasteType} pickup shortly.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/pickups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/eco-points"] });
+    },
+    onError: () => toast.error("Failed to submit pickup request"),
+  });
+
+  const completedPickups = pickupsData.filter((p) => p.status === "completed");
+  const pendingPickups = pickupsData.filter((p) => p.status === "pending");
 
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
@@ -96,10 +109,7 @@ const UserDashboard = () => {
               </CardHeader>
               <CardContent className="space-y-1.5 p-3 pt-0">
                 {mockNotifications.map((n) => (
-                  <div
-                    key={n.id}
-                    className={`p-2.5 rounded-lg text-xs ${n.read ? "bg-muted/50" : "bg-primary/5 border border-primary/10"}`}
-                  >
+                  <div key={n.id} className={`p-2.5 rounded-lg text-xs ${n.read ? "bg-muted/50" : "bg-primary/5 border border-primary/10"}`}>
                     <p className="font-medium text-foreground">{n.message}</p>
                     <p className="text-muted-foreground mt-0.5">{n.time}</p>
                   </div>
@@ -120,8 +130,8 @@ const UserDashboard = () => {
               </div>
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Eco Points</p>
-                <p className="text-4xl font-bold text-foreground leading-none mt-1">{ecoPoints}</p>
-                <p className="text-xs text-muted-foreground mt-1">{nextReward - ecoPoints} pts to next reward</p>
+                <p className="text-4xl font-bold text-foreground leading-none mt-1" data-testid="text-dashboard-points">{ecoPoints}</p>
+                <p className="text-xs text-muted-foreground mt-1">{Math.max(nextReward - ecoPoints, 0)} pts to next reward</p>
               </div>
             </div>
             <div className="text-right space-y-2">
@@ -140,7 +150,7 @@ const UserDashboard = () => {
             </div>
           </div>
           <div className="mt-4">
-            <Progress value={(ecoPoints / nextReward) * 100} className="h-2" />
+            <Progress value={Math.min((ecoPoints / nextReward) * 100, 100)} className="h-2" />
           </div>
         </CardContent>
       </Card>
@@ -175,11 +185,11 @@ const UserDashboard = () => {
           <Button
             size="lg"
             className="w-full h-12 text-base font-semibold shadow"
-            onClick={handleRequestPickup}
-            disabled={requesting}
+            onClick={() => pickupMutation.mutate()}
+            disabled={pickupMutation.isPending}
             data-testid="button-request-pickup"
           >
-            {requesting ? (
+            {pickupMutation.isPending ? (
               <><div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent mr-2" /> Requesting…</>
             ) : (
               <><Truck className="h-5 w-5 mr-2" /> Request Pickup</>
@@ -191,10 +201,10 @@ const UserDashboard = () => {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "Total Pickups", value: "12", icon: Package, color: "text-primary" },
-          { label: "Waste Recycled", value: "45kg", icon: Recycle, color: "text-success" },
-          { label: "CO₂ Saved", value: "18kg", icon: Leaf, color: "text-primary" },
-          { label: "Rewards Earned", value: "3", icon: Award, color: "text-warning" },
+          { label: "Total Pickups", value: String(pickupsData.length || 0), icon: Package, color: "text-primary" },
+          { label: "Completed", value: String(completedPickups.length || 0), icon: Recycle, color: "text-success" },
+          { label: "Eco Points", value: String(ecoPoints), icon: Leaf, color: "text-primary" },
+          { label: "Pending", value: String(pendingPickups.length || 0), icon: Award, color: "text-warning" },
         ].map((stat) => (
           <Card key={stat.label}>
             <CardContent className="p-4 text-center">
@@ -215,36 +225,37 @@ const UserDashboard = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {mockPickupHistory.map((pickup) => (
-              <div
-                key={pickup.id}
-                className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/40"
-                data-testid={`card-pickup-${pickup.id}`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${pickup.status === "completed" ? "bg-success/10" : "bg-warning/10"}`}>
-                    {pickup.status === "completed"
-                      ? <CheckCircle className="h-4 w-4 text-success" />
-                      : <Calendar className="h-4 w-4 text-warning" />}
+            {pickupsData.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">No pickups yet. Request your first one!</p>
+            ) : (
+              pickupsData.slice(0, 4).map((pickup) => (
+                <div
+                  key={pickup.id}
+                  className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/40"
+                  data-testid={`card-pickup-${pickup.id}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${pickup.status === "completed" ? "bg-success/10" : "bg-warning/10"}`}>
+                      {pickup.status === "completed"
+                        ? <CheckCircle className="h-4 w-4 text-success" />
+                        : <Calendar className="h-4 w-4 text-warning" />}
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-foreground capitalize">{pickup.wasteType}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {new Date(pickup.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xs font-medium text-foreground">{pickup.type}</p>
-                    <p className="text-[10px] text-muted-foreground">{pickup.date}</p>
-                  </div>
-                </div>
-                <div className="text-right">
                   <Badge
                     variant="outline"
                     className={`text-[10px] ${pickup.status === "completed" ? "bg-success/10 text-success border-success/30" : "bg-warning/10 text-warning border-warning/30"}`}
                   >
                     {pickup.status}
                   </Badge>
-                  {pickup.ecoPoints > 0 && (
-                    <p className="text-[10px] text-primary mt-0.5 font-medium">+{pickup.ecoPoints} pts</p>
-                  )}
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </CardContent>
         </Card>
 
@@ -286,7 +297,7 @@ const UserDashboard = () => {
                 </div>
               );
             })}
-            {wasteBins.some((b) => getBinStatus(b.fillLevel) === "red") && (
+            {binsData.some((b) => getBinStatus(b.fillLevel) === "red") && (
               <div className="flex items-center gap-2 p-2 rounded-lg bg-destructive/5 border border-destructive/20 text-xs text-destructive">
                 <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
                 <span>Some bins in your area need urgent pickup</span>

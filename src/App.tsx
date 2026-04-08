@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -24,15 +25,6 @@ const EcoPointsPage = lazy(() => import("./pages/EcoPointsPage"));
 const DriverKYCPage = lazy(() => import("./pages/DriverKYCPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 5 * 60 * 1000,
-      refetchOnWindowFocus: false,
-    },
-  },
-});
-
 function PageLoader() {
   return (
     <div className="flex items-center justify-center h-[50vh]">
@@ -42,13 +34,15 @@ function PageLoader() {
 }
 
 function ProtectedLayout() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
+  if (isLoading) return <PageLoader />;
   if (!isAuthenticated) return <Navigate to="/auth" replace />;
   return <AppLayout />;
 }
 
 function AuthGuard() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
+  if (isLoading) return <PageLoader />;
   if (!isAuthenticated) return <AuthPage />;
   if (user?.role === "driver") return <Navigate to="/driver" replace />;
   if (user?.role === "admin") return <Navigate to="/admin" replace />;
