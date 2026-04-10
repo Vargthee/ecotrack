@@ -1,5 +1,4 @@
 import { useEffect, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { MapContainer, TileLayer, CircleMarker, Popup, Polyline, Marker, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import { BinStatusBadge } from "./BinStatusBadge";
@@ -88,9 +87,12 @@ function haversineKm(a: [number, number], b: [number, number]) {
   return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
 }
 
-export function BinMapView() {
-  const { data: bins = [], isLoading } = useQuery<Bin[]>({ queryKey: ["/api/bins"] });
+type Props = {
+  bins: Bin[];
+  isLoading?: boolean;
+};
 
+export function BinMapView({ bins, isLoading }: Props) {
   const dotColors = {
     green: "bg-success",
     yellow: "bg-warning",
