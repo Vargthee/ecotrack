@@ -162,8 +162,16 @@ export function registerRoutes(app: Express) {
   // ─── PICKUP REQUESTS ──────────────────────────────────────────────────────
 
   app.get("/api/pickups", requireAuth, async (req, res) => {
-    const pickups = await storage.getPickupsByUser(req.session.userId!);
-    res.json(pickups);
+    const user = await storage.getUserById(req.session.userId!);
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+    // Drivers and admins get all pickups; users get their own
+    if (user.role === "driver" || user.role === "admin") {
+      const pickups = await storage.getAllPickups();
+      res.json(pickups);
+    } else {
+      const pickups = await storage.getPickupsByUser(req.session.userId!);
+      res.json(pickups);
+    }
   });
 
   app.post("/api/pickups", requireAuth, async (req, res) => {
@@ -177,8 +185,32 @@ export function registerRoutes(app: Express) {
 
     const { wasteType, address, notes } = parsed.data;
     const pickup = await storage.createPickup(req.session.userId!, wasteType, address, notes);
-    // Award eco points for requesting pickup
     await storage.addPoints(req.session.userId!, "Requested pickup", 10);
+    res.json(pickup);
+  });
+
+  app.patch("/api/pickups/:id/accept", requireAuth, async (req, res) => {
+    const user = await storage.getUserById(req.session.userId!);
+    if (!user || user.role !== "driver") return res.status(403).json({ error: "Drivers only" });
+    const pickup = await storage.updatePickupStatus(Number(req.params.id), "assigned", user.id);
+    res.json(pickup);
+  });
+
+  app.patch("/api/pickups/:id/start", requireAuth, async (req, res) => {
+    const pickup = await storage.updatePickupStatus(Number(req.params.id), "in_progress");
+    res.json(pickup);
+  });
+
+  app.patch("/api/pickups/:id/complete-pickup", requireAuth, async (req, res) => {
+    const pickup = await storage.updatePickupStatus(Number(req.params.id), "completed");
+    if (pickup.userId) {
+      await storage.addPoints(pickup.userId, "Pickup completed", 20);
+    }
+    res.json(pickup);
+  });
+
+  app.patch("/api/pickups/:id/cancel", requireAuth, async (req, res) => {
+    const pickup = await storage.updatePickupStatus(Number(req.params.id), "cancelled");
     res.json(pickup);
   });
 

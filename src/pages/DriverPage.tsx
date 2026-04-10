@@ -1,5 +1,5 @@
-import { DriverTaskList } from "@/components/DriverTaskList";
+import { DriverDashboard } from "@/components/DriverDashboard";
 
-const DriverPage = () => <DriverTaskList />;
+const DriverPage = () => <DriverDashboard />;
 
 export default DriverPage;

@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { BinStatusBadge } from "@/components/BinStatusBadge";
+import { PickupTrackerCard } from "@/components/PickupTrackerCard";
 
 type Bin = { id: string; location: string; fillLevel: number; type: string };
 type Pickup = { id: number; wasteType: string; status: string; createdAt: string };
@@ -50,6 +51,7 @@ const UserDashboard = () => {
   const navigate = useNavigate();
   const [showNotifications, setShowNotifications] = useState(false);
   const [selectedWasteType, setSelectedWasteType] = useState("general");
+  const [trackedPickup, setTrackedPickup] = useState<{ id: number; wasteType: string } | null>(null);
   const unreadCount = mockNotifications.filter((n) => !n.read).length;
 
   const { data: binsData = [] } = useQuery<Bin[]>({ queryKey: ["/api/bins"] });
@@ -61,13 +63,14 @@ const UserDashboard = () => {
   const nearbyBins = binsData.slice(0, 3);
 
   const pickupMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/pickups", { wasteType: selectedWasteType }),
-    onSuccess: () => {
-      toast.success("Pickup request submitted!", {
+    mutationFn: () => apiRequest<{ id: number; wasteType: string }>("POST", "/api/pickups", { wasteType: selectedWasteType }),
+    onSuccess: (pickup) => {
+      toast.success("Pickup request submitted! +10 eco points", {
         description: `A driver will be assigned for your ${selectedWasteType} pickup shortly.`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/pickups"] });
       queryClient.invalidateQueries({ queryKey: ["/api/eco-points"] });
+      setTrackedPickup({ id: pickup.id, wasteType: pickup.wasteType ?? selectedWasteType });
     },
     onError: () => toast.error("Failed to submit pickup request"),
   });
@@ -197,6 +200,15 @@ const UserDashboard = () => {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Pickup Tracker - shown after requesting */}
+      {trackedPickup && (
+        <PickupTrackerCard
+          pickupId={trackedPickup.id}
+          wasteType={trackedPickup.wasteType}
+          onClose={() => setTrackedPickup(null)}
+        />
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

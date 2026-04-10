@@ -39,6 +39,7 @@ export interface IStorage {
 
   // Pickup Requests
   getPickupsByUser(userId: number): Promise<PickupRequest[]>;
+  getAllPickups(): Promise<PickupRequest[]>;
   createPickup(userId: number, wasteType: string, address?: string, notes?: string): Promise<PickupRequest>;
   updatePickupStatus(id: number, status: string, driverId?: number): Promise<PickupRequest>;
 
@@ -153,6 +154,10 @@ class PostgresStorage implements IStorage {
 
   async getPickupsByUser(userId: number) {
     return db.select().from(pickupRequests).where(eq(pickupRequests.userId, userId)).orderBy(desc(pickupRequests.createdAt));
+  }
+
+  async getAllPickups() {
+    return db.select().from(pickupRequests).orderBy(desc(pickupRequests.createdAt));
   }
 
   async createPickup(userId: number, wasteType: string, address?: string, notes?: string) {

@@ -1,18 +1,40 @@
 import { useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { MapContainer, TileLayer, CircleMarker, Popup, Polyline, Marker, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
-import { wasteBins, getBinStatus, getBinStatusLabel } from "@/data/mockData";
 import { BinStatusBadge } from "./BinStatusBadge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { MapPin, Clock, Route } from "lucide-react";
 import { DynamicCollectionAlerts } from "./DynamicCollectionAlerts";
 import "leaflet/dist/leaflet.css";
 
+type Bin = {
+  id: string;
+  location: string;
+  lat: number;
+  lng: number;
+  fillLevel: number;
+  type: string;
+  lastCollected?: string;
+};
+
 const STATUS_COLORS = {
   green: "#22c55e",
   yellow: "#eab308",
   red: "#ef4444",
 };
+
+function getBinStatus(fill: number): "green" | "yellow" | "red" {
+  if (fill >= 80) return "red";
+  if (fill >= 50) return "yellow";
+  return "green";
+}
+
+function getBinStatusLabel(fill: number) {
+  if (fill >= 80) return "Critical — Needs immediate pickup";
+  if (fill >= 50) return "Filling up — Schedule soon";
+  return "Good — Plenty of space";
+}
 
 function createNumberIcon(n: number) {
   return L.divIcon({
@@ -23,7 +45,6 @@ function createNumberIcon(n: number) {
   });
 }
 
-// Center of Jos, Plateau State
 const JOS_CENTER: [number, number] = [9.8965, 8.8583];
 const JOS_BOUNDS: [[number, number], [number, number]] = [
   [9.75, 8.80],
@@ -38,12 +59,10 @@ function FitBounds() {
   return null;
 }
 
-// Nearest-neighbor greedy route for critical bins
-import type { WasteBin } from "@/data/mockData";
-function optimizeRoute(bins: WasteBin[]): WasteBin[] {
+function optimizeRoute(bins: Bin[]): Bin[] {
   if (bins.length === 0) return [];
   const remaining = [...bins];
-  const ordered: WasteBin[] = [];
+  const ordered: Bin[] = [];
   let current = remaining.splice(0, 1)[0];
   ordered.push(current);
   while (remaining.length > 0) {
@@ -70,6 +89,8 @@ function haversineKm(a: [number, number], b: [number, number]) {
 }
 
 export function BinMapView() {
+  const { data: bins = [], isLoading } = useQuery<Bin[]>({ queryKey: ["/api/bins"] });
+
   const dotColors = {
     green: "bg-success",
     yellow: "bg-warning",
@@ -77,8 +98,8 @@ export function BinMapView() {
   };
 
   const criticalBins = useMemo(
-    () => optimizeRoute(wasteBins.filter((b) => getBinStatus(b.fillLevel) === "red")),
-    []
+    () => optimizeRoute(bins.filter((b) => getBinStatus(b.fillLevel) === "red")),
+    [bins]
   );
   const criticalRoute: [number, number][] = criticalBins.map((b) => [b.lat, b.lng]);
 
@@ -88,7 +109,6 @@ export function BinMapView() {
     for (let i = 1; i < criticalRoute.length; i++) {
       totalKm += haversineKm(criticalRoute[i - 1], criticalRoute[i]);
     }
-    // ~20 km/h avg urban speed + 5 min per stop for collection
     const driveMin = (totalKm / 20) * 60;
     const collectionMin = criticalBins.length * 5;
     return { stops: criticalBins.length, distanceKm: totalKm, timeMin: Math.round(driveMin + collectionMin) };
@@ -155,7 +175,12 @@ export function BinMapView() {
 
       {/* Leaflet Map */}
       <Card className="overflow-hidden">
-        <div className="h-[500px] w-full">
+        <div className="h-[500px] w-full relative">
+          {isLoading && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-muted/30">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+            </div>
+          )}
           <MapContainer
             center={JOS_CENTER}
             zoom={13}
@@ -173,7 +198,7 @@ export function BinMapView() {
               <Polyline
                 positions={criticalRoute}
                 pathOptions={{
-                  color: "hsl(var(--destructive))",
+                  color: "#ef4444",
                   weight: 3,
                   dashArray: "8, 6",
                   opacity: 0.85,
@@ -187,7 +212,7 @@ export function BinMapView() {
                 </Tooltip>
               </Marker>
             ))}
-            {wasteBins.map((bin) => {
+            {bins.map((bin) => {
               const status = getBinStatus(bin.fillLevel);
               return (
                 <CircleMarker
@@ -207,7 +232,7 @@ export function BinMapView() {
                       <p className="text-muted-foreground">{bin.location}</p>
                       <p>Fill Level: <strong>{bin.fillLevel}%</strong> — {getBinStatusLabel(bin.fillLevel)}</p>
                       <p>Type: <span className="capitalize">{bin.type}</span></p>
-                      <p>Last Collected: {bin.lastCollected}</p>
+                      {bin.lastCollected && <p>Last Collected: {bin.lastCollected}</p>}
                     </div>
                   </Popup>
                 </CircleMarker>
@@ -220,7 +245,7 @@ export function BinMapView() {
       {/* Legend and bin list */}
       <div className="grid gap-4 md:grid-cols-3">
         {(["green", "yellow", "red"] as const).map((status) => {
-          const bins = wasteBins.filter((b) => getBinStatus(b.fillLevel) === status);
+          const statusBins = bins.filter((b) => getBinStatus(b.fillLevel) === status);
           const labels = { green: "Low Fill (<50%)", yellow: "Medium (50-80%)", red: "High (>80%)" };
           return (
             <Card key={status}>
@@ -228,14 +253,16 @@ export function BinMapView() {
                 <CardTitle className="flex items-center gap-2 text-sm">
                   <span className={`h-2.5 w-2.5 rounded-full ${dotColors[status]}`} />
                   {labels[status]}
-                  <span className="ml-auto font-mono text-muted-foreground">{bins.length}</span>
+                  <span className="ml-auto font-mono text-muted-foreground">{statusBins.length}</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
-                {bins.map((bin) => (
+              <CardContent className="space-y-2 max-h-40 overflow-y-auto">
+                {statusBins.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">None</p>
+                ) : statusBins.map((bin) => (
                   <div key={bin.id} className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">{bin.location}</span>
-                    <span className="font-mono font-medium">{bin.fillLevel}%</span>
+                    <span className="text-muted-foreground truncate">{bin.location}</span>
+                    <span className="font-mono font-medium ml-2 shrink-0">{bin.fillLevel}%</span>
                   </div>
                 ))}
               </CardContent>
