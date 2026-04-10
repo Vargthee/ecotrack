@@ -17,7 +17,6 @@ import { MapContainer, TileLayer, CircleMarker, Marker, Polyline, Popup, Tooltip
 import L from "leaflet";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import "leaflet/dist/leaflet.css";
 
 const JOS_CENTER: [number, number] = [9.8965, 8.8583];
 const DRIVER_START: [number, number] = [9.9050, 8.8950];

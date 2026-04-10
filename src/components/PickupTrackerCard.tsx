@@ -6,7 +6,6 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import { Truck, Star, Navigation, X, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
-import "leaflet/dist/leaflet.css";
 
 const JOS_CENTER: [number, number] = [9.8965, 8.8583];
 

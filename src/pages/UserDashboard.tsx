@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Leaf, Bell, Star, Truck, Calendar,
   CheckCircle, Package, TrendingUp, Award, Recycle,
@@ -54,9 +55,9 @@ const UserDashboard = () => {
   const [trackedPickup, setTrackedPickup] = useState<{ id: number; wasteType: string } | null>(null);
   const unreadCount = mockNotifications.filter((n) => !n.read).length;
 
-  const { data: binsData = [] } = useQuery<Bin[]>({ queryKey: ["/api/bins"] });
-  const { data: pickupsData = [] } = useQuery<Pickup[]>({ queryKey: ["/api/pickups"] });
-  const { data: pointsData } = useQuery<PointsData>({ queryKey: ["/api/eco-points"] });
+  const { data: binsData = [], isLoading: binsLoading } = useQuery<Bin[]>({ queryKey: ["/api/bins"] });
+  const { data: pickupsData = [], isLoading: pickupsLoading } = useQuery<Pickup[]>({ queryKey: ["/api/pickups"] });
+  const { data: pointsData, isLoading: pointsLoading } = useQuery<PointsData>({ queryKey: ["/api/eco-points"] });
 
   const ecoPoints = pointsData?.balance ?? 0;
   const nextReward = 500;
@@ -133,7 +134,11 @@ const UserDashboard = () => {
               </div>
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Eco Points</p>
-                <p className="text-4xl font-bold text-foreground leading-none mt-1" data-testid="text-dashboard-points">{ecoPoints}</p>
+                {pointsLoading ? (
+                  <Skeleton className="h-10 w-20 mt-1" />
+                ) : (
+                  <p className="text-4xl font-bold text-foreground leading-none mt-1" data-testid="text-dashboard-points">{ecoPoints}</p>
+                )}
                 <p className="text-xs text-muted-foreground mt-1">{Math.max(nextReward - ecoPoints, 0)} pts to next reward</p>
               </div>
             </div>
@@ -212,20 +217,26 @@ const UserDashboard = () => {
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          { label: "Total Pickups", value: String(pickupsData.length || 0), icon: Package, color: "text-primary" },
-          { label: "Completed", value: String(completedPickups.length || 0), icon: Recycle, color: "text-success" },
-          { label: "Eco Points", value: String(ecoPoints), icon: Leaf, color: "text-primary" },
-          { label: "Pending", value: String(pendingPickups.length || 0), icon: Award, color: "text-warning" },
-        ].map((stat) => (
-          <Card key={stat.label}>
-            <CardContent className="p-4 text-center">
-              <stat.icon className={`h-5 w-5 ${stat.color} mx-auto mb-2`} />
-              <p className="text-2xl font-bold text-foreground">{stat.value}</p>
-              <p className="text-xs text-muted-foreground">{stat.label}</p>
-            </CardContent>
-          </Card>
-        ))}
+        {pickupsLoading || pointsLoading ? (
+          [1, 2, 3, 4].map((i) => (
+            <Card key={i}><CardContent className="p-4 text-center"><Skeleton className="h-5 w-5 mx-auto mb-2 rounded" /><Skeleton className="h-7 w-10 mx-auto mb-1" /><Skeleton className="h-3 w-16 mx-auto" /></CardContent></Card>
+          ))
+        ) : (
+          [
+            { label: "Total Pickups", value: String(pickupsData.length || 0), icon: Package, color: "text-primary" },
+            { label: "Completed", value: String(completedPickups.length || 0), icon: Recycle, color: "text-success" },
+            { label: "Eco Points", value: String(ecoPoints), icon: Leaf, color: "text-primary" },
+            { label: "Pending", value: String(pendingPickups.length || 0), icon: Award, color: "text-warning" },
+          ].map((stat) => (
+            <Card key={stat.label}>
+              <CardContent className="p-4 text-center">
+                <stat.icon className={`h-5 w-5 ${stat.color} mx-auto mb-2`} />
+                <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+                <p className="text-xs text-muted-foreground">{stat.label}</p>
+              </CardContent>
+            </Card>
+          ))
+        )}
       </div>
 
       <div className="grid md:grid-cols-2 gap-4">
@@ -237,7 +248,9 @@ const UserDashboard = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {pickupsData.length === 0 ? (
+            {pickupsLoading ? (
+              [1, 2, 3].map((i) => <Skeleton key={i} className="h-14 w-full rounded-lg" />)
+            ) : pickupsData.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">No pickups yet. Request your first one!</p>
             ) : (
               pickupsData.slice(0, 4).map((pickup) => (
@@ -290,7 +303,12 @@ const UserDashboard = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {nearbyBins.map((bin) => {
+            {binsLoading ? (
+              [1, 2, 3].map((i) => <Skeleton key={i} className="h-14 w-full rounded-lg" />)
+            ) : nearbyBins.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">No bins nearby.</p>
+            ) : null}
+            {!binsLoading && nearbyBins.map((bin) => {
               const status = getBinStatus(bin.fillLevel);
               return (
                 <div

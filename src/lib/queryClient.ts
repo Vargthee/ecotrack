@@ -21,12 +21,18 @@ export async function apiRequest<T = unknown>(
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30 * 1000,
+      staleTime: 5 * 60 * 1000,
+      gcTime: 15 * 60 * 1000,
       refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      retry: 1,
       queryFn: async ({ queryKey }) => {
         const [path] = queryKey as [string, ...unknown[]];
         return apiRequest("GET", path);
       },
+    },
+    mutations: {
+      retry: 0,
     },
   },
 });
