@@ -1,4 +1,5 @@
 import { useSubscription, PLAN_CONFIG, type PlanTier } from "@/contexts/SubscriptionContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Lock } from "lucide-react";
@@ -14,7 +15,10 @@ const tierOrder: PlanTier[] = ["basic", "pro", "enterprise"];
 
 export function FeatureGate({ requiredTier, featureLabel, children }: FeatureGateProps) {
   const { subscription } = useSubscription();
+  const { user } = useAuth();
   const navigate = useNavigate();
+
+  if (user?.role === "admin") return <>{children}</>;
 
   const currentIdx = tierOrder.indexOf(subscription.plan_type);
   const requiredIdx = tierOrder.indexOf(requiredTier);

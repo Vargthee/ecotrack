@@ -1,7 +1,7 @@
 import {
-  Map, Truck, BarChart3, AlertTriangle, Leaf, CreditCard, Sparkles,
-  Shield, User, Award, FileCheck, LogOut, LayoutDashboard, FileText,
-  Navigation, Wallet, Users, Trash2
+  Map, Truck, BarChart3, Leaf, Shield,
+  FileCheck, LogOut, LayoutDashboard,
+  Navigation, Wallet, Users, Award, FileText, CreditCard, Sparkles
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useNavigate } from "react-router-dom";
@@ -58,15 +58,8 @@ const driverNavGroups = [
   {
     label: "Driver",
     items: [
-      { title: "Earnings", url: "/analytics", icon: Wallet },
+      { title: "Earnings & Stats", url: "/analytics", icon: Wallet },
       { title: "KYC Verification", url: "/driver/kyc", icon: FileCheck },
-    ],
-  },
-  {
-    label: "Account",
-    items: [
-      { title: "Pricing", url: "/pricing", icon: Sparkles },
-      { title: "Billing", url: "/billing", icon: CreditCard },
     ],
   },
 ];
@@ -77,21 +70,13 @@ const adminNavGroups = [
     items: [
       { title: "Admin Dashboard", url: "/admin", icon: Shield },
       { title: "Bin Map", url: "/map", icon: Map },
-      { title: "Analytics", url: "/analytics", icon: BarChart3 },
+      { title: "System Analytics", url: "/analytics", icon: BarChart3 },
     ],
   },
   {
     label: "Manage",
     items: [
-      { title: "Reports", url: "/reports", icon: AlertTriangle },
-      { title: "Users", url: "/admin", icon: Users },
-    ],
-  },
-  {
-    label: "Platform",
-    items: [
-      { title: "Pricing", url: "/pricing", icon: Sparkles },
-      { title: "Billing", url: "/billing", icon: CreditCard },
+      { title: "Users & Drivers", url: "/admin", icon: Users },
     ],
   },
 ];
@@ -202,12 +187,28 @@ export function AppSidebar() {
           </Button>
         )}
 
-        {!collapsed && (
+        {!collapsed && user?.role === "user" && (
           <div className="rounded-lg bg-sidebar-accent/50 p-3">
             <p className="text-xs text-sidebar-foreground/70">Current Plan</p>
             <div className="mt-1 flex items-center gap-2">
               <Badge className="bg-primary/20 text-sidebar-primary text-[10px] border-0">{plan.name}</Badge>
               <span className="text-xs text-sidebar-foreground/60 capitalize">{subscription.billing_cycle}</span>
+            </div>
+          </div>
+        )}
+        {!collapsed && user?.role === "admin" && (
+          <div className="rounded-lg bg-destructive/10 p-3">
+            <p className="text-xs text-sidebar-foreground/70">Access Level</p>
+            <div className="mt-1 flex items-center gap-2">
+              <Badge className="bg-destructive/20 text-destructive text-[10px] border-0">Full Access</Badge>
+            </div>
+          </div>
+        )}
+        {!collapsed && user?.role === "driver" && (
+          <div className="rounded-lg bg-warning/10 p-3">
+            <p className="text-xs text-sidebar-foreground/70">Driver Status</p>
+            <div className="mt-1 flex items-center gap-2">
+              <Badge className="bg-warning/20 text-warning text-[10px] border-0">Active Driver</Badge>
             </div>
           </div>
         )}

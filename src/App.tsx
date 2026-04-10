@@ -49,6 +49,27 @@ function AuthGuard() {
   return <Navigate to="/user-dashboard" replace />;
 }
 
+function UserOnlyRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (user?.role === "driver") return <Navigate to="/driver" replace />;
+  if (user?.role === "admin") return <Navigate to="/admin" replace />;
+  return <>{children}</>;
+}
+
+function DriverOnlyRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (user?.role === "user") return <Navigate to="/user-dashboard" replace />;
+  if (user?.role === "admin") return <Navigate to="/admin" replace />;
+  return <>{children}</>;
+}
+
+function AdminOnlyRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (user?.role === "user") return <Navigate to="/user-dashboard" replace />;
+  if (user?.role === "driver") return <Navigate to="/driver" replace />;
+  return <>{children}</>;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -65,14 +86,14 @@ const App = () => (
                 <Route element={<ProtectedLayout />}>
                   <Route path="/map" element={<MapPage />} />
                   <Route path="/analytics" element={<AnalyticsPage />} />
-                  <Route path="/driver" element={<DriverPage />} />
-                  <Route path="/driver/kyc" element={<DriverKYCPage />} />
+                  <Route path="/driver" element={<DriverOnlyRoute><DriverPage /></DriverOnlyRoute>} />
+                  <Route path="/driver/kyc" element={<DriverOnlyRoute><DriverKYCPage /></DriverOnlyRoute>} />
                   <Route path="/reports" element={<ReportsPage />} />
-                  <Route path="/pricing" element={<PricingPage />} />
-                  <Route path="/billing" element={<BillingPage />} />
-                  <Route path="/admin" element={<AdminPage />} />
-                  <Route path="/user-dashboard" element={<UserDashboard />} />
-                  <Route path="/eco-points" element={<EcoPointsPage />} />
+                  <Route path="/pricing" element={<UserOnlyRoute><PricingPage /></UserOnlyRoute>} />
+                  <Route path="/billing" element={<UserOnlyRoute><BillingPage /></UserOnlyRoute>} />
+                  <Route path="/admin" element={<AdminOnlyRoute><AdminPage /></AdminOnlyRoute>} />
+                  <Route path="/user-dashboard" element={<UserOnlyRoute><UserDashboard /></UserOnlyRoute>} />
+                  <Route path="/eco-points" element={<UserOnlyRoute><EcoPointsPage /></UserOnlyRoute>} />
                 </Route>
                 <Route path="*" element={<NotFound />} />
               </Routes>
