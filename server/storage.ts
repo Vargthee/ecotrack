@@ -1,4 +1,10 @@
-import { db } from "./db";
+import { db as _db } from "./db";
+
+function getDb() {
+  if (!_db) throw new Error("Database not available — set DATABASE_URL");
+  return _db;
+}
+
 import { eq, desc, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import {
