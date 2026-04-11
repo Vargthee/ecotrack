@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,9 +7,13 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload, FileText, Car, Camera, CheckCircle, Clock, XCircle, ArrowRight, ArrowLeft, RefreshCw } from "lucide-react";
+import {
+  Upload, FileText, Car, Camera, CheckCircle, Clock, XCircle,
+  ArrowRight, ArrowLeft, RefreshCw, FileImage, AlertCircle, Loader2, Eye
+} from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 type KYCStatus = "pending" | "approved" | "rejected";
 
@@ -37,6 +41,14 @@ interface KycRecord {
   submittedAt?: string;
 }
 
+interface UploadState {
+  uploading: boolean;
+  previewUrl?: string;
+  fileName?: string;
+  fileSize?: string;
+  error?: string;
+}
+
 const statusConfig: Record<KYCStatus, { label: string; color: string; icon: typeof CheckCircle; description: string }> = {
   pending: {
     label: "Under Review",
@@ -58,6 +70,147 @@ const statusConfig: Record<KYCStatus, { label: string; color: string; icon: type
   },
 };
 
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+interface FileUploadZoneProps {
+  field: keyof KYCData;
+  label: string;
+  hint: string;
+  accept: string;
+  icon?: typeof Upload;
+  uploadState: UploadState;
+  onUpload: (field: keyof KYCData, file: File) => Promise<void>;
+}
+
+function FileUploadZone({ field, label, hint, accept, icon: Icon = Upload, uploadState, onUpload }: FileUploadZoneProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  const handleFile = useCallback((file: File) => {
+    const maxBytes = 5 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      toast.error("File too large — maximum size is 5MB");
+      return;
+    }
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Only JPG, PNG, WebP and PDF files are allowed");
+      return;
+    }
+    onUpload(field, file);
+  }, [field, onUpload]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFile(file);
+    e.target.value = "";
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  };
+
+  const isUploaded = !uploadState.uploading && !!uploadState.previewUrl && !uploadState.error;
+  const isImage = uploadState.previewUrl && !uploadState.previewUrl.endsWith(".pdf");
+
+  return (
+    <div className="space-y-2">
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        className="hidden"
+        onChange={handleChange}
+        aria-label={label}
+      />
+      <div
+        onClick={() => !uploadState.uploading && inputRef.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+        className={cn(
+          "border-2 border-dashed rounded-lg p-8 text-center transition-all select-none",
+          !uploadState.uploading && "cursor-pointer",
+          dragOver && "border-primary bg-primary/5 scale-[1.01]",
+          isUploaded && "border-success/40 bg-success/5",
+          uploadState.error && "border-destructive/40 bg-destructive/5",
+          !dragOver && !isUploaded && !uploadState.error && !uploadState.uploading && "border-border hover:border-primary/50 hover:bg-muted/30",
+          uploadState.uploading && "border-primary/30 bg-primary/5"
+        )}
+      >
+        {uploadState.uploading ? (
+          <div className="space-y-2">
+            <Loader2 className="h-8 w-8 text-primary mx-auto animate-spin" />
+            <p className="text-sm font-medium text-primary">Uploading…</p>
+            <p className="text-xs text-muted-foreground">{uploadState.fileName}</p>
+          </div>
+        ) : isUploaded ? (
+          <div className="space-y-2">
+            {isImage ? (
+              <img
+                src={uploadState.previewUrl}
+                alt="Uploaded file preview"
+                className="h-20 w-auto mx-auto rounded-md object-cover border border-border shadow-sm"
+              />
+            ) : (
+              <div className="h-14 w-14 mx-auto rounded-lg bg-primary/10 flex items-center justify-center">
+                <FileText className="h-7 w-7 text-primary" />
+              </div>
+            )}
+            <div className="flex items-center justify-center gap-1.5">
+              <CheckCircle className="h-4 w-4 text-success shrink-0" />
+              <p className="text-sm font-medium text-success">Uploaded successfully</p>
+            </div>
+            <p className="text-xs text-muted-foreground truncate max-w-[200px] mx-auto">{uploadState.fileName}</p>
+            {uploadState.fileSize && (
+              <p className="text-[10px] text-muted-foreground">{uploadState.fileSize}</p>
+            )}
+            <p className="text-[10px] text-primary hover:underline cursor-pointer mt-1">Click to replace</p>
+          </div>
+        ) : uploadState.error ? (
+          <div className="space-y-2">
+            <AlertCircle className="h-8 w-8 text-destructive mx-auto" />
+            <p className="text-sm font-medium text-destructive">Upload failed</p>
+            <p className="text-xs text-muted-foreground">{uploadState.error}</p>
+            <p className="text-xs text-primary hover:underline cursor-pointer">Click to try again</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <Icon className="h-8 w-8 text-muted-foreground mx-auto" />
+            <p className="text-sm font-medium text-foreground">{label}</p>
+            <p className="text-xs text-muted-foreground">{hint}</p>
+            <div className="flex items-center justify-center gap-1 text-[10px] text-muted-foreground/70 mt-1">
+              <FileImage className="h-3 w-3" />
+              <span>JPG, PNG, WebP or PDF — max 5MB</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {isUploaded && uploadState.previewUrl && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 text-xs text-muted-foreground w-full"
+          onClick={(e) => {
+            e.stopPropagation();
+            window.open(uploadState.previewUrl, "_blank");
+          }}
+        >
+          <Eye className="h-3 w-3 mr-1" /> View uploaded file
+        </Button>
+      )}
+    </div>
+  );
+}
+
 const DriverKYCPage = () => {
   const qc = useQueryClient();
   const [step, setStep] = useState(0);
@@ -65,6 +218,11 @@ const DriverKYCPage = () => {
   const [data, setData] = useState<KYCData>({
     govtIdType: "", govtIdUrl: "", licenseUrl: "",
     vehicleMake: "", vehicleModel: "", vehicleYear: "", vehiclePlate: "", profilePhotoUrl: "",
+  });
+  const [uploadStates, setUploadStates] = useState<Record<string, UploadState>>({
+    govtIdUrl: { uploading: false },
+    licenseUrl: { uploading: false },
+    profilePhotoUrl: { uploading: false },
   });
 
   const { data: kycRecord, isLoading } = useQuery<KycRecord | null>({
@@ -89,6 +247,53 @@ const DriverKYCPage = () => {
     onError: () => toast.error("Submission failed. Please try again."),
   });
 
+  const handleUpload = useCallback(async (field: keyof KYCData, file: File) => {
+    setUploadStates((prev) => ({
+      ...prev,
+      [field]: { uploading: true, fileName: file.name },
+    }));
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Upload failed" }));
+        throw new Error(err.error || "Upload failed");
+      }
+
+      const result = await res.json();
+
+      const isImage = file.type.startsWith("image/");
+      const previewUrl = isImage ? result.url : undefined;
+
+      setUploadStates((prev) => ({
+        ...prev,
+        [field]: {
+          uploading: false,
+          previewUrl: result.url,
+          fileName: file.name,
+          fileSize: formatFileSize(result.size),
+        },
+      }));
+
+      setData((prev) => ({ ...prev, [field]: result.url }));
+      toast.success(`${file.name} uploaded`, { description: formatFileSize(result.size) });
+    } catch (err: any) {
+      setUploadStates((prev) => ({
+        ...prev,
+        [field]: { uploading: false, error: err.message ?? "Upload failed" },
+      }));
+      toast.error("Upload failed", { description: err.message });
+    }
+  }, []);
+
   const steps = [
     { title: "Government ID", description: "Upload a valid government-issued ID", icon: FileText },
     { title: "Driver's License", description: "Upload your driver's license", icon: FileText },
@@ -97,14 +302,6 @@ const DriverKYCPage = () => {
   ];
 
   const progress = ((step + 1) / steps.length) * 100;
-
-  const handleFileSelect = (field: keyof KYCData) => {
-    const names: Record<string, string> = {
-      govtIdUrl: "government_id", licenseUrl: "drivers_license", profilePhotoUrl: "profile_photo",
-    };
-    setData((prev) => ({ ...prev, [field]: `${names[field] ?? field}_${Date.now()}.jpg` }));
-    toast.success("File selected successfully");
-  };
 
   const handleSubmit = () => {
     if (!data.govtIdType) { toast.error("Please select an ID type"); return; }
@@ -116,6 +313,8 @@ const DriverKYCPage = () => {
     if (!data.profilePhotoUrl) { toast.error("Please upload your profile photo"); return; }
     submitMutation.mutate(data);
   };
+
+  const isAnyUploading = Object.values(uploadStates).some((s) => s.uploading);
 
   if (isLoading) {
     return (
@@ -233,30 +432,28 @@ const DriverKYCPage = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div
-                className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
-                onClick={() => handleFileSelect("govtIdUrl")}
-              >
-                <Upload className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                <p className="text-sm font-medium text-foreground">
-                  {data.govtIdUrl ? "✓ ID document uploaded" : "Click to upload ID document"}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">JPG, PNG or PDF — max 5MB</p>
-              </div>
+              <FileUploadZone
+                field="govtIdUrl"
+                label="Click to upload ID document"
+                hint="Drag & drop or click to browse"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                icon={Upload}
+                uploadState={uploadStates.govtIdUrl}
+                onUpload={handleUpload}
+              />
             </div>
           )}
 
           {step === 1 && (
-            <div
-              className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
-              onClick={() => handleFileSelect("licenseUrl")}
-            >
-              <Upload className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-              <p className="text-sm font-medium text-foreground">
-                {data.licenseUrl ? "✓ License uploaded" : "Click to upload driver's license"}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">Valid Nigerian driver's license (front &amp; back)</p>
-            </div>
+            <FileUploadZone
+              field="licenseUrl"
+              label="Click to upload driver's license"
+              hint="Valid Nigerian driver's license (front & back)"
+              accept="image/jpeg,image/png,image/webp,application/pdf"
+              icon={Upload}
+              uploadState={uploadStates.licenseUrl}
+              onUpload={handleUpload}
+            />
           )}
 
           {step === 2 && (
@@ -285,29 +482,30 @@ const DriverKYCPage = () => {
           )}
 
           {step === 3 && (
-            <div
-              className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
-              onClick={() => handleFileSelect("profilePhotoUrl")}
-            >
-              <Camera className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-              <p className="text-sm font-medium text-foreground">
-                {data.profilePhotoUrl ? "✓ Photo uploaded" : "Click to upload profile photo"}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">Clear face photo against plain background</p>
-            </div>
+            <FileUploadZone
+              field="profilePhotoUrl"
+              label="Click to upload profile photo"
+              hint="Clear face photo against plain background"
+              accept="image/jpeg,image/png,image/webp"
+              icon={Camera}
+              uploadState={uploadStates.profilePhotoUrl}
+              onUpload={handleUpload}
+            />
           )}
 
           <div className="flex justify-between pt-4">
-            <Button variant="outline" onClick={() => setStep(step - 1)} disabled={step === 0}>
+            <Button variant="outline" onClick={() => setStep(step - 1)} disabled={step === 0 || isAnyUploading}>
               <ArrowLeft className="h-4 w-4 mr-1" /> Back
             </Button>
             {step < steps.length - 1 ? (
-              <Button onClick={() => setStep(step + 1)}>
+              <Button onClick={() => setStep(step + 1)} disabled={isAnyUploading}>
                 Next <ArrowRight className="h-4 w-4 ml-1" />
               </Button>
             ) : (
-              <Button onClick={handleSubmit} disabled={submitMutation.isPending}>
-                {submitMutation.isPending ? "Submitting…" : "Submit for Review"}
+              <Button onClick={handleSubmit} disabled={submitMutation.isPending || isAnyUploading}>
+                {submitMutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting…</>
+                ) : "Submit for Review"}
               </Button>
             )}
           </div>

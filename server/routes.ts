@@ -1,6 +1,30 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { storage } from "./storage";
 import { z } from "zod";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const uploadsDir = path.resolve(__dirname, "../uploads");
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, uploadsDir),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, `${Date.now()}_${Math.random().toString(36).slice(2)}${ext}`);
+    },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error("Only JPG, PNG, WebP and PDF files are allowed"));
+  },
+});
 
 declare module "express-session" {
   interface SessionData {
@@ -21,6 +45,21 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
 }
 
 export function registerRoutes(app: Express) {
+
+  // ─── FILE UPLOAD ───────────────────────────────────────────────────────────
+
+  app.post("/api/upload", requireAuth, (req, res) => {
+    upload.single("file")(req, res, (err) => {
+      if (err instanceof multer.MulterError) {
+        if (err.code === "LIMIT_FILE_SIZE") return res.status(400).json({ error: "File too large. Maximum size is 5MB." });
+        return res.status(400).json({ error: err.message });
+      }
+      if (err) return res.status(400).json({ error: err.message });
+      if (!req.file) return res.status(400).json({ error: "No file provided" });
+      const url = `/uploads/${req.file.filename}`;
+      res.json({ url, filename: req.file.filename, originalName: req.file.originalname, size: req.file.size });
+    });
+  });
 
   // ─── AUTH ─────────────────────────────────────────────────────────────────
 

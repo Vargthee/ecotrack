@@ -2,16 +2,21 @@ import express from "express";
 import compression from "compression";
 import session from "express-session";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import { registerRoutes } from "./routes";
 import { seedDatabase } from "./seed";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+const uploadsDir = path.resolve(__dirname, "../uploads");
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
 const app = express();
 app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use("/uploads", express.static(uploadsDir));
 
 // Use in-memory session store (no DB dependency)
 app.use(session({
