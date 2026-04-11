@@ -645,7 +645,7 @@ const AdminPage = () => {
                             {new Date(pickup.createdAt).toLocaleDateString("en-NG", { month: "short", day: "numeric" })}
                           </TableCell>
                           <TableCell className="text-right">
-                            {(pickup.status === "pending" || pickup.status === "assigned") && pickup.status !== "completed" ? (
+                            {(pickup.status === "pending" || pickup.status === "assigned") ? (
                               <div className="flex items-center gap-2 justify-end">
                                 <Select
                                   value={assignDriverMap[pickup.id] ?? (pickup.driverId ? String(pickup.driverId) : "")}
