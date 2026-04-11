@@ -179,9 +179,11 @@ class PostgresStorage implements IStorage {
     return pickup;
   }
 
-  async updatePickupStatus(id: number, status: string, driverId?: number) {
+  async updatePickupStatus(id: number, status: string, driverId?: number | null) {
+    const update: Record<string, unknown> = { status: status as any };
+    if (driverId !== undefined) update.driverId = driverId ?? null;
     const [pickup] = await getDb().update(pickupRequests)
-      .set({ status: status as any, ...(driverId ? { driverId } : {}) })
+      .set(update as any)
       .where(eq(pickupRequests.id, id))
       .returning();
     return pickup;

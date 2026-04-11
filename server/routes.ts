@@ -214,6 +214,18 @@ export function registerRoutes(app: Express) {
     res.json(pickup);
   });
 
+  app.patch("/api/pickups/:id/assign", requireAdmin, async (req, res) => {
+    const { driverId } = req.body;
+    if (!driverId) return res.status(400).json({ error: "driverId required" });
+    const pickup = await storage.updatePickupStatus(Number(req.params.id), "assigned", Number(driverId));
+    res.json(pickup);
+  });
+
+  app.patch("/api/pickups/:id/unassign", requireAdmin, async (req, res) => {
+    const pickup = await storage.updatePickupStatus(Number(req.params.id), "pending", undefined);
+    res.json(pickup);
+  });
+
   // ─── ECO POINTS ───────────────────────────────────────────────────────────
 
   app.get("/api/eco-points", requireAuth, async (req, res) => {
