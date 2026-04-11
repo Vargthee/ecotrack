@@ -9,9 +9,9 @@ import { eq, desc, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import {
   users, wasteBins, driverTasks, citizenReports, pickupRequests,
-  ecoPointsLog, subscriptions,
+  ecoPointsLog, subscriptions, driverKyc,
   type User, type WasteBin, type DriverTask, type CitizenReport,
-  type PickupRequest, type EcoPointsEntry, type Subscription,
+  type PickupRequest, type EcoPointsEntry, type Subscription, type DriverKyc,
 } from "../shared/schema";
 
 export interface IStorage {
@@ -58,6 +58,12 @@ export interface IStorage {
   // Subscriptions
   getSubscriptionByUser(userId: number): Promise<Subscription | undefined>;
   upsertSubscription(userId: number, data: Partial<Omit<Subscription, "id" | "userId" | "createdAt">>): Promise<Subscription>;
+
+  // KYC
+  getKycByDriver(driverId: number): Promise<DriverKyc | undefined>;
+  getAllKyc(): Promise<(DriverKyc & { driverName: string; driverEmail: string })[]>;
+  upsertKyc(driverId: number, data: Partial<Omit<DriverKyc, "id" | "driverId" | "createdAt">>): Promise<DriverKyc>;
+  updateKycStatus(driverId: number, status: "approved" | "rejected", rejectionReason?: string): Promise<DriverKyc>;
 }
 
 class PostgresStorage implements IStorage {
@@ -226,6 +232,47 @@ class PostgresStorage implements IStorage {
       ...data,
     }).returning();
     return sub;
+  }
+
+  async getKycByDriver(driverId: number) {
+    const [kyc] = await getDb().select().from(driverKyc).where(eq(driverKyc.driverId, driverId));
+    return kyc;
+  }
+
+  async getAllKyc() {
+    const rows = await getDb()
+      .select({
+        kyc: driverKyc,
+        driverName: users.name,
+        driverEmail: users.email,
+      })
+      .from(driverKyc)
+      .innerJoin(users, eq(driverKyc.driverId, users.id))
+      .orderBy(desc(driverKyc.submittedAt));
+    return rows.map((r) => ({ ...r.kyc, driverName: r.driverName, driverEmail: r.driverEmail }));
+  }
+
+  async upsertKyc(driverId: number, data: Partial<Omit<DriverKyc, "id" | "driverId" | "createdAt">>) {
+    const existing = await this.getKycByDriver(driverId);
+    if (existing) {
+      const [kyc] = await getDb().update(driverKyc)
+        .set({ ...data, submittedAt: new Date() })
+        .where(eq(driverKyc.driverId, driverId))
+        .returning();
+      return kyc;
+    }
+    const [kyc] = await getDb().insert(driverKyc)
+      .values({ driverId, status: "pending", ...data })
+      .returning();
+    return kyc;
+  }
+
+  async updateKycStatus(driverId: number, status: "approved" | "rejected", rejectionReason?: string) {
+    const [kyc] = await getDb().update(driverKyc)
+      .set({ status, rejectionReason: rejectionReason ?? null, reviewedAt: new Date() })
+      .where(eq(driverKyc.driverId, driverId))
+      .returning();
+    return kyc;
   }
 }
 

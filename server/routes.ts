@@ -262,6 +262,34 @@ export function registerRoutes(app: Express) {
     res.json(sub);
   });
 
+  // ─── DRIVER KYC ───────────────────────────────────────────────────────────
+
+  app.get("/api/driver/kyc", requireAuth, async (req, res) => {
+    const user = await storage.getUserById(req.session.userId!);
+    if (!user || user.role !== "driver") return res.status(403).json({ error: "Drivers only" });
+    const kyc = await storage.getKycByDriver(req.session.userId!);
+    res.json(kyc ?? null);
+  });
+
+  app.post("/api/driver/kyc", requireAuth, async (req, res) => {
+    const user = await storage.getUserById(req.session.userId!);
+    if (!user || user.role !== "driver") return res.status(403).json({ error: "Drivers only" });
+    const schema = z.object({
+      govtIdType: z.string().optional(),
+      govtIdUrl: z.string().optional(),
+      licenseUrl: z.string().optional(),
+      vehicleMake: z.string().optional(),
+      vehicleModel: z.string().optional(),
+      vehicleYear: z.string().optional(),
+      vehiclePlate: z.string().optional(),
+      profilePhotoUrl: z.string().optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    const kyc = await storage.upsertKyc(req.session.userId!, { ...parsed.data, status: "pending" });
+    res.json(kyc);
+  });
+
   // ─── ADMIN ────────────────────────────────────────────────────────────────
 
   app.get("/api/admin/users", requireAdmin, async (_req, res) => {
@@ -276,11 +304,12 @@ export function registerRoutes(app: Express) {
   });
 
   app.get("/api/admin/stats", requireAdmin, async (_req, res) => {
-    const [allUsers, allBins, allReports, allTasks] = await Promise.all([
+    const [allUsers, allBins, allReports, allTasks, allKyc] = await Promise.all([
       storage.getAllUsers(),
       storage.getAllBins(),
       storage.getAllReports(),
       storage.getAllTasks(),
+      storage.getAllKyc(),
     ]);
     res.json({
       totalUsers: allUsers.filter((u) => u.role === "user").length,
@@ -290,6 +319,27 @@ export function registerRoutes(app: Express) {
       pendingReports: allReports.filter((r) => r.status === "pending").length,
       totalTasks: allTasks.length,
       completedTasks: allTasks.filter((t) => t.completed).length,
+      pendingKyc: allKyc.filter((k) => k.status === "pending").length,
     });
+  });
+
+  app.get("/api/admin/kyc", requireAdmin, async (_req, res) => {
+    const kycs = await storage.getAllKyc();
+    res.json(kycs);
+  });
+
+  app.patch("/api/admin/kyc/:driverId", requireAdmin, async (req, res) => {
+    const schema = z.object({
+      status: z.enum(["approved", "rejected"]),
+      rejectionReason: z.string().optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    const kyc = await storage.updateKycStatus(
+      Number(req.params.driverId),
+      parsed.data.status,
+      parsed.data.rejectionReason,
+    );
+    res.json(kyc);
   });
 }

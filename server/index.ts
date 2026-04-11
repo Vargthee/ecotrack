@@ -4,6 +4,7 @@ import session from "express-session";
 import path from "path";
 import { fileURLToPath } from "url";
 import { registerRoutes } from "./routes";
+import { seedDatabase } from "./seed";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -29,6 +30,9 @@ registerRoutes(app);
 const isDev = process.env.NODE_ENV !== "production";
 
 async function startServer() {
+  // Seed demo data on first run (no-op if data already exists)
+  await seedDatabase().catch((e) => console.error("[seed] Error:", e));
+
   if (isDev) {
     const { setupVite } = await import("./vite");
     await setupVite(app);
