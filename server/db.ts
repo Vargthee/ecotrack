@@ -1,7 +1,32 @@
-import { drizzle } from "drizzle-orm/node-postgres";
-import pg from "pg";
 import * as schema from "../shared/schema";
 
-const connectionString = process.env.DATABASE_URL || "";
-const pool = connectionString ? new pg.Pool({ connectionString }) : null;
-export const db = pool ? drizzle(pool, { schema }) : null;
+let _db: any = null;
+let _initialized = false;
+
+export async function initDb() {
+  if (_initialized) return _db;
+  _initialized = true;
+
+  const connectionString = process.env.DATABASE_URL || "";
+  if (!connectionString) {
+    console.log("[db] No DATABASE_URL — running without database");
+    return null;
+  }
+
+  try {
+    const { drizzle } = await import("drizzle-orm/node-postgres");
+    const pg = await import("pg");
+    const Pool = pg.default?.Pool || pg.Pool;
+    const pool = new Pool({ connectionString });
+    _db = drizzle(pool, { schema });
+    console.log("[db] Connected to database");
+  } catch (e) {
+    console.error("[db] Failed to connect:", e);
+  }
+
+  return _db;
+}
+
+export function getDb() {
+  return _db;
+}

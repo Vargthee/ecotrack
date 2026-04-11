@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { getDb } from "./db";
 import bcrypt from "bcryptjs";
 import {
   users, wasteBins, driverTasks, citizenReports,
@@ -11,6 +11,7 @@ async function hash(pw: string) {
 }
 
 export async function seedDatabase() {
+  const db = getDb();
   if (!db) { console.log("[seed] No DB — skipping"); return; }
 
   const existing = await db.select().from(users).limit(1);
