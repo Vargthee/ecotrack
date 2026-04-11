@@ -35,7 +35,8 @@ registerRoutes(app);
 const isDev = process.env.NODE_ENV !== "production";
 
 async function startServer() {
-  // Seed demo data on first run (no-op if data already exists)
+  const { initDb } = await import("./db");
+  await initDb();
   await seedDatabase().catch((e) => console.error("[seed] Error:", e));
 
   if (isDev) {
