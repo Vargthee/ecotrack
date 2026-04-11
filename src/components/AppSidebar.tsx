@@ -3,6 +3,7 @@ import {
   FileCheck, LogOut, LayoutDashboard,
   Navigation, Wallet, Users, Award, FileText, CreditCard, Sparkles
 } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { NavLink } from "@/components/NavLink";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
@@ -154,6 +155,8 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="p-4 space-y-3">
+        {/* Theme Toggle */}
+        <ThemeToggle collapsed={collapsed} />
         {!collapsed && isAuthenticated && (
           <div className="space-y-2">
             <div className="rounded-lg bg-sidebar-accent/50 p-3 space-y-1">
