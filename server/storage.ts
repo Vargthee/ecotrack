@@ -1,8 +1,9 @@
-import { db as _db } from "./db";
+import { getDb as _getDb } from "./db";
 
 function getDb() {
-  if (!_db) throw new Error("Database not available — set DATABASE_URL");
-  return _db;
+  const db = _getDb();
+  if (!db) throw new Error("Database not available — set DATABASE_URL");
+  return db;
 }
 
 import { eq, desc, sql } from "drizzle-orm";

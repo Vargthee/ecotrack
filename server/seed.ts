@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { getDb } from "./db";
 import bcrypt from "bcryptjs";
 import {
   users, wasteBins, driverTasks, citizenReports,
