@@ -106,15 +106,25 @@ const AdminPage = () => {
 
   const { data: allPickups = [], isLoading: pickupsLoading } = useQuery<PickupEntry[]>({
     queryKey: ["/api/pickups"],
-    queryFn: () => fetch("/api/pickups", { credentials: "include" }).then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetch("/api/pickups", { credentials: "include" });
+      if (!r.ok) throw new Error("Failed to load pickups");
+      const d = await r.json();
+      return Array.isArray(d) ? d : [];
+    },
   });
 
   const { data: allAdminUsers = [] } = useQuery<AdminUserEntry[]>({
     queryKey: ["/api/admin/users"],
-    queryFn: () => fetch("/api/admin/users", { credentials: "include" }).then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetch("/api/admin/users", { credentials: "include" });
+      if (!r.ok) throw new Error("Failed to load users");
+      const d = await r.json();
+      return Array.isArray(d) ? d : [];
+    },
   });
 
-  const driverList = allAdminUsers.filter((u) => u.role === "driver");
+  const driverList = Array.isArray(allAdminUsers) ? allAdminUsers.filter((u) => u.role === "driver") : [];
   const [assignDriverMap, setAssignDriverMap] = useState<Record<number, string>>({});
 
   const assignMutation = useMutation({
