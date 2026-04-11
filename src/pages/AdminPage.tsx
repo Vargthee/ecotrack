@@ -95,7 +95,12 @@ const AdminPage = () => {
 
   const { data: kycList = [], isLoading: kycLoading } = useQuery<KycEntry[]>({
     queryKey: ["/api/admin/kyc"],
-    queryFn: () => fetch("/api/admin/kyc", { credentials: "include" }).then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetch("/api/admin/kyc", { credentials: "include" });
+      if (!r.ok) throw new Error("Failed to load KYC list");
+      const d = await r.json();
+      return Array.isArray(d) ? d : [];
+    },
   });
 
   interface PickupEntry {
