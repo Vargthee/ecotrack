@@ -134,6 +134,18 @@ const LandingPage = () => {
   const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
 
+  /* dark mode tracking */
+  const [isDark, setIsDark] = useState(() =>
+    document.documentElement.classList.contains("dark")
+  );
+  useEffect(() => {
+    const observer = new MutationObserver(() =>
+      setIsDark(document.documentElement.classList.contains("dark"))
+    );
+    observer.observe(document.documentElement, { attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
+
   /* nav scroll shadow */
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
@@ -238,7 +250,7 @@ const LandingPage = () => {
                     <div
                       key={l}
                       className="w-8 h-8 rounded-full border-2 border-background flex items-center justify-center text-[10px] font-bold text-primary-foreground"
-                      style={{ backgroundColor: `hsl(113, ${28 + i * 5}%, ${22 + i * 5}%)` }}
+                      style={{ backgroundColor: `hsl(113, ${32 + i * 5}%, ${isDark ? 38 + i * 6 : 22 + i * 5}%)` }}
                     >
                       {l}
                     </div>
