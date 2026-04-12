@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
+import { useRealtimeEvents } from "@/hooks/useRealtimeEvents";
 
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const MapPage = lazy(() => import("./pages/MapPage"));
@@ -62,6 +63,7 @@ function FullPageSkeleton() {
 
 function ProtectedLayout() {
   const { isAuthenticated, isLoading } = useAuth();
+  useRealtimeEvents();
   if (isLoading) return <FullPageSkeleton />;
   if (!isAuthenticated) return <Navigate to="/auth" replace />;
   return <AppLayout />;

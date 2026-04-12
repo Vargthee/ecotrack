@@ -9,6 +9,7 @@ import {
   uploadToCloud,
   generateFilename,
 } from "./cloudStorage";
+import { eventBus, emitEvent } from "./eventBus";
 
 const uploadsDir = path.resolve(process.cwd(), "uploads");
 if (!isCloudStorageConfigured() && !fs.existsSync(uploadsDir)) {
@@ -100,6 +101,30 @@ export function registerRoutes(app: Express) {
     console.error("[SECURITY] SESSION_SECRET env var is not set in production. Refusing to start.");
     process.exit(1);
   }
+
+  // ─── SERVER-SENT EVENTS ────────────────────────────────────────────────────
+
+  app.get("/api/events", requireAuth, (req, res) => {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+
+    res.write(`data: ${JSON.stringify({ type: "connected" })}\n\n`);
+
+    const onEvent = (event: any) => {
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    };
+
+    eventBus.on("app:event", onEvent);
+
+    const ping = setInterval(() => res.write(": ping\n\n"), 25000);
+
+    req.on("close", () => {
+      clearInterval(ping);
+      eventBus.off("app:event", onEvent);
+    });
+  });
 
   // ─── FILE UPLOAD ───────────────────────────────────────────────────────────
 
@@ -255,6 +280,7 @@ export function registerRoutes(app: Express) {
   app.patch("/api/bins/:id", requireAdmin, async (req, res) => {
     const { fillLevel } = req.body;
     const bin = await storage.updateBinFillLevel(req.params.id, fillLevel);
+    emitEvent({ type: "bin:update", data: { id: bin.id, fillLevel: bin.fillLevel } });
     res.json(bin);
   });
 
@@ -293,6 +319,7 @@ export function registerRoutes(app: Express) {
     if (!bin) return res.status(404).json({ error: "Bin not found" });
 
     const task = await storage.createTask(parsed.data);
+    emitEvent({ type: "task:new", data: { id: task.id, location: task.location, priority: task.priority, driverId: task.driverId } });
     res.status(201).json(task);
   });
 
@@ -308,6 +335,7 @@ export function registerRoutes(app: Express) {
 
     const updated = await storage.completeTask(req.params.id, req.session.userId!);
     await storage.addPoints(req.session.userId!, "Completed pickup", task.earning > 700 ? 20 : 15);
+    emitEvent({ type: "task:complete", data: { id: updated.id, driverId: updated.driverId } });
     res.json(updated);
   });
 
@@ -347,12 +375,14 @@ export function registerRoutes(app: Express) {
 
     const report = await storage.createReport({ userId: req.session.userId!, ...parsed.data });
     await storage.addPoints(req.session.userId!, "Submitted report", 15);
+    emitEvent({ type: "report:new", data: { id: report.id, reportType: report.type, description: report.description } });
     res.json(report);
   });
 
   app.patch("/api/reports/:id", requireAdmin, async (req, res) => {
     const { status } = req.body;
     const report = await storage.updateReportStatus(req.params.id, status);
+    emitEvent({ type: "report:status", data: { id: report.id, status: report.status } });
     res.json(report);
   });
 
@@ -380,6 +410,7 @@ export function registerRoutes(app: Express) {
     const { wasteType, address, notes } = parsed.data;
     const pickup = await storage.createPickup(req.session.userId!, wasteType, address, notes);
     await storage.addPoints(req.session.userId!, "Requested pickup", 10);
+    emitEvent({ type: "pickup:new", data: { id: pickup.id, wasteType: pickup.wasteType, address: pickup.address ?? undefined } });
     res.json(pickup);
   });
 
@@ -387,6 +418,7 @@ export function registerRoutes(app: Express) {
     const user = await storage.getUserById(req.session.userId!);
     if (!user || user.role !== "driver") return res.status(403).json({ error: "Drivers only" });
     const pickup = await storage.updatePickupStatus(Number(req.params.id), "assigned", user.id);
+    emitEvent({ type: "pickup:status", data: { id: pickup.id, status: "assigned", userId: pickup.userId } });
     res.json(pickup);
   });
 
@@ -399,6 +431,7 @@ export function registerRoutes(app: Express) {
     }
 
     const updated = await storage.updatePickupStatus(Number(req.params.id), "in_progress");
+    emitEvent({ type: "pickup:status", data: { id: updated.id, status: "in_progress", userId: updated.userId } });
     res.json(updated);
   });
 
@@ -414,6 +447,7 @@ export function registerRoutes(app: Express) {
     if (updated.userId) {
       await storage.addPoints(updated.userId, "Pickup completed", 20);
     }
+    emitEvent({ type: "pickup:status", data: { id: updated.id, status: "completed", userId: updated.userId } });
     res.json(updated);
   });
 
@@ -430,6 +464,7 @@ export function registerRoutes(app: Express) {
     }
 
     const updated = await storage.updatePickupStatus(Number(req.params.id), "cancelled");
+    emitEvent({ type: "pickup:status", data: { id: updated.id, status: "cancelled", userId: updated.userId } });
     res.json(updated);
   });
 
@@ -595,6 +630,7 @@ export function registerRoutes(app: Express) {
       parsed.data.status,
       parsed.data.rejectionReason,
     );
+    emitEvent({ type: "kyc:status", data: { driverId: kyc.driverId, status: kyc.status, rejectionReason: kyc.rejectionReason ?? undefined } });
     res.json(kyc);
   });
 }
