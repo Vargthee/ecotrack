@@ -3,14 +3,11 @@ import compression from "compression";
 import session from "express-session";
 import path from "path";
 import fs from "fs";
-import { fileURLToPath } from "url";
 import { registerRoutes } from "./routes";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export const uploadsDir = process.env.VERCEL
   ? "/tmp/uploads"
-  : path.resolve(__dirname, "../uploads");
+  : path.resolve(process.cwd(), "uploads");
 
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
