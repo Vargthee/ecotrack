@@ -3,6 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 export const userRoleEnum = pgEnum("user_role", ["user", "driver", "admin"]);
+export const userStatusEnum = pgEnum("user_status", ["active", "suspended", "banned"]);
 export const kycStatusEnum = pgEnum("kyc_status", ["pending", "approved", "rejected"]);
 export const binTypeEnum = pgEnum("bin_type", ["general", "recycling", "organic"]);
 export const taskPriorityEnum = pgEnum("task_priority", ["high", "medium", "low"]);
@@ -20,6 +21,7 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   role: userRoleEnum("role").notNull().default("user"),
+  status: userStatusEnum("status").notNull().default("active"),
   phone: text("phone"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

@@ -6,7 +6,7 @@ function db() {
   return d;
 }
 
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, and, ne } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import {
   users, wasteBins, driverTasks, citizenReports, pickupRequests,
@@ -23,11 +23,14 @@ export interface IStorage {
   verifyPassword(plain: string, hash: string): Promise<boolean>;
   getAllUsers(): Promise<User[]>;
   updateUserRole(id: number, role: "user" | "driver" | "admin"): Promise<User>;
-  updateUserStatus(id: number, status: "active" | "suspended" | "banned"): Promise<void>;
+  updateUserStatus(id: number, status: "active" | "suspended" | "banned"): Promise<User>;
+  updateUserProfile(id: number, data: { name?: string; phone?: string }): Promise<User>;
+  changePassword(id: number, newPassword: string): Promise<void>;
 
   // Bins
   getAllBins(): Promise<WasteBin[]>;
   getBinById(id: string): Promise<WasteBin | undefined>;
+  createBin(data: { id: string; location: string; lat: number; lng: number; fillLevel?: number; lastCollected: string; type: "general" | "recycling" | "organic" }): Promise<WasteBin>;
   updateBinFillLevel(id: string, fillLevel: number): Promise<WasteBin>;
   resetBin(id: string): Promise<WasteBin>;
   deleteBin(id: string): Promise<void>;
@@ -35,8 +38,10 @@ export interface IStorage {
   // Driver Tasks
   getTasksByDriver(driverId: number): Promise<DriverTask[]>;
   getAllTasks(): Promise<DriverTask[]>;
+  createTask(data: { id: string; binId: string; driverId?: number; location: string; fillLevel: number; priority: "high" | "medium" | "low"; estimatedTime: string; wasteType: "general" | "recycling" | "organic" | "ewaste"; earning: number }): Promise<DriverTask>;
   completeTask(id: string, driverId: number): Promise<DriverTask>;
   uncompleteTask(id: string): Promise<DriverTask>;
+  getDriverEarnings(driverId: number): Promise<{ total: number; thisWeek: number; taskCount: number; completedCount: number }>;
 
   // Citizen Reports
   getAllReports(): Promise<CitizenReport[]>;
@@ -47,14 +52,17 @@ export interface IStorage {
   // Pickup Requests
   getPickupsByUser(userId: number): Promise<PickupRequest[]>;
   getAllPickups(): Promise<PickupRequest[]>;
+  getPickupById(id: number): Promise<PickupRequest | undefined>;
   createPickup(userId: number, wasteType: string, address?: string, notes?: string): Promise<PickupRequest>;
-  updatePickupStatus(id: number, status: string, driverId?: number): Promise<PickupRequest>;
+  updatePickupStatus(id: number, status: string, driverId?: number | null): Promise<PickupRequest>;
+  getPickupStats(): Promise<{ pending: number; assigned: number; inProgress: number; completed: number; cancelled: number }>;
 
   // Eco Points
   getPointsByUser(userId: number): Promise<number>;
   getPointsLog(userId: number): Promise<EcoPointsEntry[]>;
   addPoints(userId: number, action: string, points: number): Promise<EcoPointsEntry>;
   deductPoints(userId: number, action: string, points: number): Promise<EcoPointsEntry>;
+  getLeaderboard(limit?: number): Promise<{ userId: number; name: string; total: number }[]>;
 
   // Subscriptions
   getSubscriptionByUser(userId: number): Promise<Subscription | undefined>;
@@ -97,8 +105,19 @@ class PostgresStorage implements IStorage {
     return user;
   }
 
-  async updateUserStatus(_id: number, _status: string) {
-    // Status stored in memory for demo (would be a DB field in full prod)
+  async updateUserStatus(id: number, status: "active" | "suspended" | "banned") {
+    const [user] = await db().update(users).set({ status }).where(eq(users.id, id)).returning();
+    return user;
+  }
+
+  async updateUserProfile(id: number, data: { name?: string; phone?: string }) {
+    const [user] = await db().update(users).set(data).where(eq(users.id, id)).returning();
+    return user;
+  }
+
+  async changePassword(id: number, newPassword: string) {
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await db().update(users).set({ passwordHash }).where(eq(users.id, id));
   }
 
   async getAllBins() {
@@ -107,6 +126,11 @@ class PostgresStorage implements IStorage {
 
   async getBinById(id: string) {
     const [bin] = await db().select().from(wasteBins).where(eq(wasteBins.id, id));
+    return bin;
+  }
+
+  async createBin(data: { id: string; location: string; lat: number; lng: number; fillLevel?: number; lastCollected: string; type: "general" | "recycling" | "organic" }) {
+    const [bin] = await db().insert(wasteBins).values({ fillLevel: 0, ...data }).returning();
     return bin;
   }
 
@@ -133,6 +157,11 @@ class PostgresStorage implements IStorage {
     return db().select().from(driverTasks).orderBy(desc(driverTasks.createdAt));
   }
 
+  async createTask(data: { id: string; binId: string; driverId?: number; location: string; fillLevel: number; priority: "high" | "medium" | "low"; estimatedTime: string; wasteType: "general" | "recycling" | "organic" | "ewaste"; earning: number }) {
+    const [task] = await db().insert(driverTasks).values({ ...data, completed: false }).returning();
+    return task;
+  }
+
   async completeTask(id: string, driverId: number) {
     const [task] = await db().update(driverTasks)
       .set({ completed: true, driverId })
@@ -144,6 +173,21 @@ class PostgresStorage implements IStorage {
   async uncompleteTask(id: string) {
     const [task] = await db().update(driverTasks).set({ completed: false }).where(eq(driverTasks.id, id)).returning();
     return task;
+  }
+
+  async getDriverEarnings(driverId: number) {
+    const tasks = await db().select().from(driverTasks)
+      .where(and(eq(driverTasks.driverId, driverId), eq(driverTasks.completed, true)));
+
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const thisWeekTasks = tasks.filter(t => new Date(t.createdAt) >= weekAgo);
+
+    return {
+      total: tasks.reduce((sum, t) => sum + t.earning, 0),
+      thisWeek: thisWeekTasks.reduce((sum, t) => sum + t.earning, 0),
+      taskCount: await db().select({ count: sql<number>`count(*)` }).from(driverTasks).where(eq(driverTasks.driverId, driverId)).then(r => Number(r[0]?.count ?? 0)),
+      completedCount: tasks.length,
+    };
   }
 
   async getAllReports() {
@@ -173,6 +217,11 @@ class PostgresStorage implements IStorage {
     return db().select().from(pickupRequests).orderBy(desc(pickupRequests.createdAt));
   }
 
+  async getPickupById(id: number) {
+    const [pickup] = await db().select().from(pickupRequests).where(eq(pickupRequests.id, id));
+    return pickup;
+  }
+
   async createPickup(userId: number, wasteType: string, address?: string, notes?: string) {
     const [pickup] = await db().insert(pickupRequests)
       .values({ userId, wasteType: wasteType as any, address, notes })
@@ -188,6 +237,17 @@ class PostgresStorage implements IStorage {
       .where(eq(pickupRequests.id, id))
       .returning();
     return pickup;
+  }
+
+  async getPickupStats() {
+    const all = await db().select().from(pickupRequests);
+    return {
+      pending: all.filter(p => p.status === "pending").length,
+      assigned: all.filter(p => p.status === "assigned").length,
+      inProgress: all.filter(p => p.status === "in_progress").length,
+      completed: all.filter(p => p.status === "completed").length,
+      cancelled: all.filter(p => p.status === "cancelled").length,
+    };
   }
 
   async getPointsByUser(userId: number) {
@@ -208,6 +268,22 @@ class PostgresStorage implements IStorage {
   async deductPoints(userId: number, action: string, points: number) {
     const [entry] = await db().insert(ecoPointsLog).values({ userId, action, points: -Math.abs(points) }).returning();
     return entry;
+  }
+
+  async getLeaderboard(limit = 10) {
+    const rows = await db()
+      .select({
+        userId: ecoPointsLog.userId,
+        name: users.name,
+        total: sql<number>`COALESCE(SUM(${ecoPointsLog.points}), 0)`,
+      })
+      .from(ecoPointsLog)
+      .innerJoin(users, eq(ecoPointsLog.userId, users.id))
+      .where(ne(users.role, "admin"))
+      .groupBy(ecoPointsLog.userId, users.name)
+      .orderBy(desc(sql`SUM(${ecoPointsLog.points})`))
+      .limit(limit);
+    return rows.map(r => ({ userId: r.userId, name: r.name, total: Number(r.total) }));
   }
 
   async getSubscriptionByUser(userId: number) {
