@@ -1,6 +1,8 @@
 import express from "express";
 import compression from "compression";
 import session from "express-session";
+import pg from "pg";
+import ConnectPgSimple from "connect-pg-simple";
 import { initDb } from "../server/db";
 import { seedDatabase } from "../server/seed";
 import { registerRoutes } from "../server/routes";
@@ -11,8 +13,22 @@ app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+const PgSession = ConnectPgSimple(session);
+
+const sessionPool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL?.includes("neon.tech")
+    ? { rejectUnauthorized: false }
+    : false,
+  max: 2,
+});
+
 app.use(
   session({
+    store: new PgSession({
+      pool: sessionPool,
+      createTableIfMissing: true,
+    }),
     secret: process.env.SESSION_SECRET || "ecotrack-dev-secret-change-in-prod",
     resave: false,
     saveUninitialized: false,
