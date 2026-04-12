@@ -9,7 +9,7 @@ function getInitialTheme(): "light" | "dark" {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-export function ThemeToggle({ collapsed = false }: { collapsed?: boolean }) {
+export function ThemeToggle({ collapsed = false, className }: { collapsed?: boolean; className?: string }) {
   const [theme, setTheme] = useState<"light" | "dark">(getInitialTheme);
 
   useEffect(() => {
@@ -22,7 +22,12 @@ export function ThemeToggle({ collapsed = false }: { collapsed?: boolean }) {
 
   if (collapsed) {
     return (
-      <Button variant="ghost" size="icon" onClick={toggle} className="w-full text-sidebar-foreground/70 hover:text-sidebar-foreground">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={toggle}
+        className={className ?? "w-full text-sidebar-foreground/70 hover:text-sidebar-foreground"}
+      >
         {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
       </Button>
     );

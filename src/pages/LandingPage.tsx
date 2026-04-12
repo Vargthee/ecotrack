@@ -3,6 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useInView } from "@/hooks/use-in-view";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { useEffect, useState, useRef, type ReactNode } from "react";
 import {
   Leaf,
@@ -178,6 +179,7 @@ const LandingPage = () => {
             </Badge>
           </div>
           <nav className="flex items-center gap-2">
+            <ThemeToggle collapsed className="text-muted-foreground hover:text-foreground" />
             <Button
               variant="ghost"
               size="sm"
