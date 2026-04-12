@@ -4,19 +4,23 @@ import session from "express-session";
 import path from "path";
 import fs from "fs";
 import { registerRoutes } from "./routes";
+import { isCloudStorageConfigured } from "./cloudStorage";
 
-export const uploadsDir = process.env.VERCEL
-  ? "/tmp/uploads"
-  : path.resolve(process.cwd(), "uploads");
+const uploadsDir = path.resolve(process.cwd(), "uploads");
 
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+if (!isCloudStorageConfigured() && !fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
 
 const app = express();
 
 app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use("/uploads", express.static(uploadsDir));
+
+if (!isCloudStorageConfigured()) {
+  app.use("/uploads", express.static(uploadsDir));
+}
 
 app.use(
   session({

@@ -4,20 +4,25 @@ import { z } from "zod";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import {
+  isCloudStorageConfigured,
+  uploadToCloud,
+  generateFilename,
+} from "./cloudStorage";
 
-const uploadsDir = process.env.VERCEL
-  ? "/tmp/uploads"
-  : path.resolve(process.cwd(), "uploads");
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+const uploadsDir = path.resolve(process.cwd(), "uploads");
+if (!isCloudStorageConfigured() && !fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
 
 const upload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, uploadsDir),
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase();
-      cb(null, `${Date.now()}_${Math.random().toString(36).slice(2)}${ext}`);
-    },
-  }),
+  storage: isCloudStorageConfigured()
+    ? multer.memoryStorage()
+    : multer.diskStorage({
+        destination: (_req, _file, cb) => cb(null, uploadsDir),
+        filename: (_req, file, cb) =>
+          cb(null, generateFilename(file.originalname)),
+      }),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
@@ -99,13 +104,25 @@ export function registerRoutes(app: Express) {
   // ─── FILE UPLOAD ───────────────────────────────────────────────────────────
 
   app.post("/api/upload", requireAuth, (req, res) => {
-    upload.single("file")(req, res, (err) => {
+    upload.single("file")(req, res, async (err) => {
       if (err instanceof multer.MulterError) {
         if (err.code === "LIMIT_FILE_SIZE") return res.status(400).json({ error: "File too large. Maximum size is 5MB." });
         return res.status(400).json({ error: err.message });
       }
       if (err) return res.status(400).json({ error: err.message });
       if (!req.file) return res.status(400).json({ error: "No file provided" });
+
+      if (isCloudStorageConfigured()) {
+        try {
+          const filename = generateFilename(req.file.originalname);
+          const url = await uploadToCloud(req.file.buffer, filename, req.file.mimetype);
+          return res.json({ url, filename, originalName: req.file.originalname, size: req.file.size });
+        } catch (uploadErr: any) {
+          console.error("[upload] R2 error:", uploadErr);
+          return res.status(500).json({ error: "Failed to upload file to cloud storage." });
+        }
+      }
+
       const url = `/uploads/${req.file.filename}`;
       res.json({ url, filename: req.file.filename, originalName: req.file.originalname, size: req.file.size });
     });
