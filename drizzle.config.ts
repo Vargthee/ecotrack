@@ -6,6 +6,6 @@ export default defineConfig({
   dialect: "postgresql",
   dbCredentials: {
     url: process.env.DATABASE_URL!,
-    ssl: false,
+    ssl: process.env.DATABASE_URL?.includes("neon.tech") ? true : false,
   },
 });

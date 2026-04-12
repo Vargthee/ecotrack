@@ -42,11 +42,17 @@ src/
   data/              - Mock/static data (mockData.ts, adminMockData.ts)
 
 server/
-  index.ts           - Express server + seed-on-startup
+  app.ts             - Express app factory (middleware + routes, no listen) — shared by dev and Vercel
+  index.ts           - Dev/prod server entry (imports app.ts, adds Vite, calls listen)
   routes.ts          - All API endpoints
   storage.ts         - PostgreSQL storage layer (IStorage interface)
-  db.ts              - Drizzle DB connection
+  db.ts              - Drizzle DB connection (auto-detects Neon vs. node-postgres)
   seed.ts            - Demo data seeder (no-op if data exists)
+
+api/
+  index.ts           - Vercel serverless handler (imports app.ts, lazy-inits DB)
+
+vercel.json          - Vercel config: frontend → CDN, /api/* → serverless function
 
 shared/
   schema.ts          - Drizzle schema (single source of truth)
@@ -91,3 +97,23 @@ npm run build      # Build for production
 - Manual Vite chunk splitting: react-vendor, map-vendor, charts-vendor, ui-vendor
 - Session auth via `express-session` (in-memory store)
 - Subscription context mirrors DB plan via localStorage key `ecotrack_subscription`
+
+## Vercel Deployment
+
+The project is structured for zero-config Vercel deployment:
+
+1. `vercel.json` routes `/api/*` to `api/index.ts` (Vercel serverless function) and everything else to the static Vite build
+2. `server/app.ts` contains the Express app (no `listen` call) — shared between dev and Vercel
+3. `api/index.ts` is the Vercel entry point; it lazy-initialises the DB before the first request
+4. Uploads use `/tmp/uploads` on Vercel (ephemeral); use S3/Cloudinary in production
+5. DB auto-detects Neon (HTTP driver) vs standard PostgreSQL (node-postgres + SSL)
+6. **Required Vercel env vars**: `DATABASE_URL` (Neon connection string), `SESSION_SECRET`
+
+Steps to deploy:
+```bash
+# 1. Create a Neon database at neon.tech
+# 2. Set DATABASE_URL and SESSION_SECRET in Vercel project settings
+# 3. Run schema push against the new DB:
+DATABASE_URL=<neon-url> npm run db:push
+# 4. Import project to Vercel — it will use vercel.json automatically
+```

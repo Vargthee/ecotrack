@@ -23,6 +23,11 @@ import {
   ChevronRight,
   Wallet,
   Bell,
+  Building2,
+  FileText,
+  Lock,
+  Globe,
+  CalendarCheck,
 } from "lucide-react";
 
 /* ── scroll-triggered fade + slide up ── */
@@ -675,6 +680,137 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* ══ GOVERNMENT PITCH ══ */}
+      <section className="py-20 px-5 sm:px-8">
+        <div className="max-w-6xl mx-auto">
+          <FadeUp className="text-center mb-14 space-y-3">
+            <Badge variant="outline" className="border-primary/30 text-primary bg-accent text-xs gap-1.5">
+              <Building2 className="h-3 w-3" /> For Government & Public Institutions
+            </Badge>
+            <h2 className="text-3xl sm:text-4xl font-bold leading-tight">
+              A platform Plateau State can<br />
+              <span className="text-primary">officially stand behind.</span>
+            </h2>
+            <p className="text-muted-foreground max-w-xl mx-auto text-base leading-relaxed">
+              EcoTrack is built to meet the accountability, reporting, and governance standards that public institutions require — not as an afterthought, but from the ground up.
+            </p>
+          </FadeUp>
+
+          {/* Government impact metrics */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-14">
+            {[
+              { value: "40%", label: "Cost Reduction", sub: "vs. paper-based dispatch" },
+              { value: "<4 hrs", label: "Avg. Response Time", sub: "citizen-to-driver" },
+              { value: "17 LGAs", label: "Coverage Ready", sub: "across Plateau State" },
+              { value: "100%", label: "Audit-Trailed", sub: "every admin action logged" },
+            ].map((m) => (
+              <FadeUp key={m.label}>
+                <div className="rounded-2xl border border-border bg-card p-5 text-center space-y-1 hover:border-primary/20 hover:shadow-sm transition-[border-color,box-shadow] duration-300">
+                  <p className="text-2xl sm:text-3xl font-extrabold text-primary">{m.value}</p>
+                  <p className="text-sm font-semibold text-foreground">{m.label}</p>
+                  <p className="text-xs text-muted-foreground">{m.sub}</p>
+                </div>
+              </FadeUp>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Compliance & Governance */}
+            <FadeUp>
+              <div className="rounded-2xl border border-border bg-card p-8 space-y-6 h-full">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-accent flex items-center justify-center flex-shrink-0">
+                    <Lock className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-lg">Governance & Compliance</h3>
+                    <p className="text-xs text-muted-foreground">Built to public-sector standards</p>
+                  </div>
+                </div>
+                <ul className="space-y-3 text-sm">
+                  {[
+                    { icon: <ShieldCheck className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />, text: "Full audit trail — every login, approval, and status change is timestamped and recorded" },
+                    { icon: <Lock className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />, text: "Role-based access control — officials only see what they are authorised to see" },
+                    { icon: <Globe className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />, text: "Data remains within configurable jurisdiction — no third-party data sharing" },
+                    { icon: <FileText className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />, text: "NITDA-aligned data governance — designed for Nigerian regulatory requirements" },
+                    { icon: <ShieldCheck className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />, text: "KYC verification workflow for all drivers — background-screened before activation" },
+                  ].map((item, i) => (
+                    <li key={i} className="flex items-start gap-3 text-muted-foreground">
+                      {item.icon}
+                      {item.text}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </FadeUp>
+
+            {/* Admin capabilities */}
+            <FadeUp delay={100}>
+              <div className="rounded-2xl border border-border bg-card p-8 space-y-6 h-full">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-accent flex items-center justify-center flex-shrink-0">
+                    <BarChart3 className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-lg">Command Centre for City Officials</h3>
+                    <p className="text-xs text-muted-foreground">Real-time oversight, not monthly reports</p>
+                  </div>
+                </div>
+                <ul className="space-y-3 text-sm">
+                  {[
+                    { icon: <MapPin className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />, text: "Live bin health map across all LGAs — identify overflow hotspots before they become crises" },
+                    { icon: <TrendingUp className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />, text: "Collection rate analytics — track pickup completion rates by area, time, and driver" },
+                    { icon: <Users className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />, text: "Citizen registration and subscription management at scale" },
+                    { icon: <FileText className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />, text: "Exportable monthly and quarterly reports for government record-keeping" },
+                    { icon: <Bell className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />, text: "Incident escalation and user report management with SLA tracking" },
+                  ].map((item, i) => (
+                    <li key={i} className="flex items-start gap-3 text-muted-foreground">
+                      {item.icon}
+                      {item.text}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </FadeUp>
+          </div>
+
+          {/* Government CTA card */}
+          <FadeUp delay={100} className="mt-10">
+            <div className="rounded-2xl bg-muted/50 border border-border p-8 sm:p-10 flex flex-col sm:flex-row items-start sm:items-center gap-8 justify-between">
+              <div className="space-y-2 max-w-lg">
+                <div className="flex items-center gap-2">
+                  <CalendarCheck className="h-5 w-5 text-primary" />
+                  <span className="font-bold text-lg">Ready to present to Plateau State leadership?</span>
+                </div>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Schedule a live demonstration for your ministry, agency, or LGA office. We walk your team through the admin dashboard, data privacy architecture, and procurement pathway — at your convenience.
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3 flex-shrink-0">
+                <Button
+                  size="lg"
+                  className="gap-2 font-semibold whitespace-nowrap transition-transform active:scale-95"
+                  onClick={() => navigate("/auth")}
+                  data-testid="gov-demo-cta"
+                >
+                  <CalendarCheck className="h-4 w-4" />
+                  Request a Government Demo
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="gap-2 font-semibold whitespace-nowrap transition-transform active:scale-95"
+                  onClick={() => navigate("/auth")}
+                  data-testid="gov-admin-cta"
+                >
+                  View Admin Dashboard
+                </Button>
+              </div>
+            </div>
+          </FadeUp>
+        </div>
+      </section>
+
       {/* ══ FINAL CTA ══ */}
       <section className="py-24 px-5 sm:px-8 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-accent/50 via-background to-background" />
@@ -736,7 +872,7 @@ const LandingPage = () => {
                 <button onClick={() => navigate("/auth")} className="hover:text-primary transition-colors">Register</button>
                 <button onClick={() => navigate("/auth")} className="hover:text-primary transition-colors">Drivers</button>
               </div>
-              <p className="text-xs text-muted-foreground">© 2025 EcoTrack Nigeria. All rights reserved.</p>
+              <p className="text-xs text-muted-foreground">© 2026 EcoTrack Nigeria. All rights reserved.</p>
             </div>
           </div>
         </div>
