@@ -27,7 +27,6 @@ import {
   FileText,
   Lock,
   Globe,
-  CalendarCheck,
 } from "lucide-react";
 
 /* ── scroll-triggered fade + slide up ── */
@@ -774,40 +773,6 @@ const LandingPage = () => {
             </FadeUp>
           </div>
 
-          {/* Government CTA card */}
-          <FadeUp delay={100} className="mt-10">
-            <div className="rounded-2xl bg-muted/50 border border-border p-8 sm:p-10 flex flex-col sm:flex-row items-start sm:items-center gap-8 justify-between">
-              <div className="space-y-2 max-w-lg">
-                <div className="flex items-center gap-2">
-                  <CalendarCheck className="h-5 w-5 text-primary" />
-                  <span className="font-bold text-lg">Ready to present to Plateau State leadership?</span>
-                </div>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  Schedule a live demonstration for your ministry, agency, or LGA office. We walk your team through the admin dashboard, data privacy architecture, and procurement pathway — at your convenience.
-                </p>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-3 flex-shrink-0">
-                <Button
-                  size="lg"
-                  className="gap-2 font-semibold whitespace-nowrap transition-transform active:scale-95"
-                  onClick={() => navigate("/auth")}
-                  data-testid="gov-demo-cta"
-                >
-                  <CalendarCheck className="h-4 w-4" />
-                  Request a Government Demo
-                </Button>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="gap-2 font-semibold whitespace-nowrap transition-transform active:scale-95"
-                  onClick={() => navigate("/auth")}
-                  data-testid="gov-admin-cta"
-                >
-                  View Admin Dashboard
-                </Button>
-              </div>
-            </div>
-          </FadeUp>
         </div>
       </section>
 
