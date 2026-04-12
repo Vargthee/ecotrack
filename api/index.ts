@@ -3,6 +3,7 @@ import compression from "compression";
 import session from "express-session";
 import { initDb } from "../server/db";
 import { seedDatabase } from "../server/seed";
+import { registerRoutes } from "../server/routes";
 
 const app = express();
 
@@ -23,20 +24,13 @@ app.use(
   })
 );
 
-// Dynamically import and register routes to avoid top-level side effects
-let routesRegistered = false;
+registerRoutes(app);
+
 const ready = initDb().then(() =>
   seedDatabase().catch((e) => console.error("[seed]", e))
 );
 
 export default async function handler(req: any, res: any) {
   await ready;
-
-  if (!routesRegistered) {
-    const { registerRoutes } = await import("../server/routes");
-    registerRoutes(app);
-    routesRegistered = true;
-  }
-
   return app(req, res);
 }
