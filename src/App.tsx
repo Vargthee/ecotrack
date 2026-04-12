@@ -8,6 +8,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { NotificationsProvider } from "@/contexts/NotificationsContext";
 import { AppLayout } from "@/components/AppLayout";
 import { useRealtimeEvents } from "@/hooks/useRealtimeEvents";
 
@@ -103,6 +104,7 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <AuthProvider>
+        <NotificationsProvider>
         <SubscriptionProvider>
           <Toaster />
           <Sonner />
@@ -132,6 +134,7 @@ const App = () => (
             </Suspense>
           </BrowserRouter>
         </SubscriptionProvider>
+        </NotificationsProvider>
       </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>

@@ -2,10 +2,13 @@ import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { useNotifications } from "@/contexts/NotificationsContext";
+import type { NotificationSeverity } from "@/contexts/NotificationsContext";
 
 export function useRealtimeEvents() {
   const { user, isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
+  const { addNotification } = useNotifications();
   const esRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
@@ -18,7 +21,7 @@ export function useRealtimeEvents() {
       es.onmessage = (e) => {
         try {
           const event = JSON.parse(e.data);
-          handleEvent(event, user!, queryClient);
+          handleEvent(event, user!, queryClient, addNotification);
         } catch {}
       };
 
@@ -35,10 +38,32 @@ export function useRealtimeEvents() {
       esRef.current?.close();
       esRef.current = null;
     };
-  }, [isAuthenticated, user?.id, queryClient]);
+  }, [isAuthenticated, user?.id, queryClient, addNotification]);
 }
 
-function handleEvent(event: any, user: { id: string; role: string }, queryClient: ReturnType<typeof useQueryClient>) {
+type AddNotification = ReturnType<typeof useNotifications>["addNotification"];
+
+function notify(
+  addNotification: AddNotification,
+  severity: NotificationSeverity,
+  title: string,
+  description: string
+) {
+  addNotification({ severity, title, description });
+  switch (severity) {
+    case "success": toast.success(title, { description }); break;
+    case "warning": toast.warning(title, { description }); break;
+    case "error":   toast.error(title, { description });   break;
+    default:        toast.info(title, { description });    break;
+  }
+}
+
+function handleEvent(
+  event: any,
+  user: { id: string; role: string },
+  queryClient: ReturnType<typeof useQueryClient>,
+  addNotification: AddNotification
+) {
   const role = user.role;
   const userId = Number(user.id);
 
@@ -47,23 +72,22 @@ function handleEvent(event: any, user: { id: string; role: string }, queryClient
       if (role === "admin" || role === "driver") {
         queryClient.invalidateQueries({ queryKey: ["/api/pickups"] });
         queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
-        toast.info("New pickup request", {
-          description: `${event.data.wasteType} waste${event.data.address ? ` · ${event.data.address}` : ""}`,
-        });
+        notify(addNotification, "info", "New pickup request",
+          `${event.data.wasteType} waste${event.data.address ? ` · ${event.data.address}` : ""}`);
       }
       break;
     }
     case "pickup:status": {
       queryClient.invalidateQueries({ queryKey: ["/api/pickups"] });
       if (event.data.userId === userId) {
-        const labels: Record<string, string> = {
-          assigned: "A driver has been assigned to your pickup",
-          in_progress: "Your pickup is now in progress",
-          completed: "Your pickup has been completed",
-          cancelled: "Your pickup was cancelled",
+        const labels: Record<string, [NotificationSeverity, string]> = {
+          assigned:    ["info",    "A driver has been assigned to your pickup"],
+          in_progress: ["info",    "Your pickup is now in progress"],
+          completed:   ["success", "Your pickup has been completed"],
+          cancelled:   ["warning", "Your pickup was cancelled"],
         };
-        const msg = labels[event.data.status];
-        if (msg) toast.info("Pickup update", { description: msg });
+        const hit = labels[event.data.status];
+        if (hit) notify(addNotification, hit[0], "Pickup update", hit[1]);
       }
       break;
     }
@@ -71,9 +95,8 @@ function handleEvent(event: any, user: { id: string; role: string }, queryClient
       if (role === "admin") {
         queryClient.invalidateQueries({ queryKey: ["/api/reports"] });
         queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
-        toast.info("New citizen report", {
-          description: `${event.data.reportType.replace("_", " ")} · ${event.data.description.slice(0, 60)}`,
-        });
+        notify(addNotification, "info", "New citizen report",
+          `${event.data.reportType.replace("_", " ")} · ${event.data.description.slice(0, 60)}`);
       }
       break;
     }
@@ -85,9 +108,8 @@ function handleEvent(event: any, user: { id: string; role: string }, queryClient
       if (role === "admin" || role === "driver") {
         queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
         if (role === "driver") {
-          toast.info("New collection task", {
-            description: `${event.data.location} · ${event.data.priority} priority`,
-          });
+          notify(addNotification, "info", "New collection task",
+            `${event.data.location} · ${event.data.priority} priority`);
         }
       }
       break;
@@ -97,7 +119,8 @@ function handleEvent(event: any, user: { id: string; role: string }, queryClient
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
       queryClient.invalidateQueries({ queryKey: ["/api/driver/earnings"] });
       if (role === "admin") {
-        toast.success("Task completed", { description: `Task ${event.data.id} has been marked done` });
+        notify(addNotification, "success", "Task completed",
+          `Task ${event.data.id} has been marked done`);
       }
       break;
     }
@@ -105,9 +128,11 @@ function handleEvent(event: any, user: { id: string; role: string }, queryClient
       if (userId === event.data.driverId) {
         queryClient.invalidateQueries({ queryKey: ["/api/driver/kyc"] });
         if (event.data.status === "approved") {
-          toast.success("KYC approved!", { description: "You can now accept pickup requests" });
+          notify(addNotification, "success", "KYC approved!",
+            "You can now accept pickup requests");
         } else {
-          toast.error("KYC rejected", { description: event.data.rejectionReason || "Please resubmit your documents" });
+          notify(addNotification, "error", "KYC rejected",
+            event.data.rejectionReason || "Please resubmit your documents");
         }
       }
       if (role === "admin") {
@@ -119,9 +144,8 @@ function handleEvent(event: any, user: { id: string; role: string }, queryClient
     case "bin:update": {
       queryClient.invalidateQueries({ queryKey: ["/api/bins"] });
       if (role === "admin" && event.data.fillLevel >= 80) {
-        toast.warning("Bin nearly full", {
-          description: `Bin ${event.data.id} is at ${event.data.fillLevel}%`,
-        });
+        notify(addNotification, "warning", "Bin nearly full",
+          `Bin ${event.data.id} is at ${event.data.fillLevel}%`);
       }
       break;
     }

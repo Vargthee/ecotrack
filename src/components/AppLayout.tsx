@@ -2,6 +2,7 @@ import { memo } from "react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Outlet } from "react-router-dom";
+import { NotificationBell } from "@/components/NotificationBell";
 
 export const AppLayout = memo(function AppLayout() {
   return (
@@ -11,7 +12,8 @@ export const AppLayout = memo(function AppLayout() {
         <div className="flex-1 flex flex-col min-w-0">
           <header className="h-14 flex items-center border-b bg-card px-4 shrink-0">
             <SidebarTrigger className="mr-3" />
-            <span className="text-sm font-medium text-muted-foreground truncate">EcoTrack Waste Management</span>
+            <span className="text-sm font-medium text-muted-foreground truncate flex-1">EcoTrack Waste Management</span>
+            <NotificationBell />
           </header>
           <main className="flex-1 overflow-auto p-4 md:p-6">
             <Outlet />

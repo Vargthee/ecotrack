@@ -31,6 +31,8 @@ export default defineConfig({
       "recharts",
       "@tanstack/react-query",
       "lucide-react",
+      "@radix-ui/react-popover",
+      "@radix-ui/react-scroll-area",
     ],
   },
   build: {
