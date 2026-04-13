@@ -14,6 +14,8 @@ if (!isCloudStorageConfigured() && !fs.existsSync(uploadsDir)) {
 
 const app = express();
 
+app.set("trust proxy", 1);
+
 app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -22,14 +24,17 @@ if (!isCloudStorageConfigured()) {
   app.use("/uploads", express.static(uploadsDir));
 }
 
+const isProd = process.env.NODE_ENV === "production";
+
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "ecotrack-dev-secret-change-in-prod",
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: process.env.NODE_ENV === "production",
+      secure: isProd,
       httpOnly: true,
+      sameSite: "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     },
   })
