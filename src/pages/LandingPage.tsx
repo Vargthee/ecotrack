@@ -200,7 +200,7 @@ const LandingPage = () => {
               variant="ghost"
               size="sm"
               className="hidden sm:inline-flex text-muted-foreground hover:text-foreground transition-colors"
-              onClick={() => navigate("/auth")}
+              onClick={() => navigate("/auth?mode=login")}
               data-testid="link-sign-in"
             >
               Sign In
@@ -833,7 +833,7 @@ const LandingPage = () => {
             </div>
             <div className="flex flex-col sm:items-end gap-2">
               <div className="flex gap-4 text-sm text-muted-foreground">
-                <button onClick={() => navigate("/auth")} className="hover:text-primary transition-colors">Sign In</button>
+                <button onClick={() => navigate("/auth?mode=login")} className="hover:text-primary transition-colors">Sign In</button>
                 <button onClick={() => navigate("/auth")} className="hover:text-primary transition-colors">Register</button>
                 <button onClick={() => navigate("/auth")} className="hover:text-primary transition-colors">Drivers</button>
               </div>

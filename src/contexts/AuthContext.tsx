@@ -16,8 +16,8 @@ interface AuthContextValue {
   user: AuthUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string, role: UserRole) => Promise<boolean>;
-  register: (name: string, email: string, password: string, role: UserRole) => Promise<boolean>;
+  login: (email: string, password: string, role: UserRole) => Promise<string | null>;
+  register: (name: string, email: string, password: string, role: UserRole) => Promise<string | null>;
   logout: () => void;
 }
 
@@ -31,6 +31,15 @@ function mapApiUser(u: any): AuthUser {
     role: u.role as UserRole,
     phone: u.phone ?? undefined,
   };
+}
+
+async function extractError(res: Response): Promise<string> {
+  try {
+    const data = await res.json();
+    return data?.error || data?.message || "Something went wrong";
+  } catch {
+    return "Something went wrong";
+  }
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -47,7 +56,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setIsLoading(false));
   }, []);
 
-  const login = useCallback(async (email: string, password: string, _role: UserRole): Promise<boolean> => {
+  // Returns null on success, error string on failure
+  const login = useCallback(async (email: string, password: string, _role: UserRole): Promise<string | null> => {
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
@@ -55,17 +65,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         credentials: "include",
         body: JSON.stringify({ email, password }),
       });
-      if (!res.ok) return false;
+      if (!res.ok) {
+        const msg = await extractError(res);
+        return res.status === 401 ? "Incorrect email or password" : msg;
+      }
       const data = await res.json();
       setUser(mapApiUser(data));
-      return true;
+      return null;
     } catch {
-      return false;
+      return "Network error — please try again";
     }
   }, []);
 
-  const register = useCallback(async (name: string, email: string, password: string, role: UserRole): Promise<boolean> => {
-    if (role === "admin") return false;
+  // Returns null on success, error string on failure
+  const register = useCallback(async (name: string, email: string, password: string, role: UserRole): Promise<string | null> => {
+    if (role === "admin") return "Admin accounts cannot be created here";
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
@@ -73,12 +87,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         credentials: "include",
         body: JSON.stringify({ name, email, password, role }),
       });
-      if (!res.ok) return false;
+      if (!res.ok) {
+        const msg = await extractError(res);
+        return res.status === 409 ? "An account with this email already exists" : msg;
+      }
       const data = await res.json();
       setUser(mapApiUser(data));
-      return true;
+      return null;
     } catch {
-      return false;
+      return "Network error — please try again";
     }
   }, []);
 

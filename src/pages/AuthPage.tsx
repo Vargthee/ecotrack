@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth, type UserRole } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -47,8 +47,11 @@ const redirectFor: Record<UserRole, string> = {
 };
 
 const AuthPage = () => {
+  const [searchParams] = useSearchParams();
+  const initialMode = searchParams.get("mode") === "login" ? "login" : "register";
+
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [mode, setMode] = useState<"login" | "register">(initialMode);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -119,20 +122,20 @@ const AuthPage = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      let success: boolean;
+      let error: string | null;
       if (mode === "login") {
-        success = await login(email, password, selectedRole);
+        error = await login(email, password, selectedRole);
       } else {
-        success = await register(name, email, password, selectedRole);
+        error = await register(name, email, password, selectedRole);
       }
-      if (success) {
-        toast.success(`Welcome! Signed in as ${selectedRole}`);
+      if (!error) {
+        toast.success(mode === "login" ? "Welcome back!" : "Account created! Welcome to EcoTrack.");
         navigate(redirectFor[selectedRole]);
       } else {
-        toast.error(selectedRole === "admin" ? "Invalid admin credentials" : "Invalid credentials");
+        toast.error(error);
       }
     } catch {
-      toast.error("Something went wrong");
+      toast.error("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -159,8 +162,8 @@ const AuthPage = () => {
           </CardTitle>
           <CardDescription>
             {mode === "login"
-              ? `Sign in as ${selectedRole === "user" ? "a user" : "a driver"}`
-              : `Register as ${selectedRole === "user" ? "a user" : "a driver"}`}
+              ? `Sign in as ${selectedRole === "user" ? "a resident" : "a driver"}`
+              : `Create your ${selectedRole === "user" ? "resident" : "driver"} account`}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -174,6 +177,7 @@ const AuthPage = () => {
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Enter your full name"
                   required
+                  minLength={2}
                   data-testid="input-name"
                 />
               </div>
@@ -200,6 +204,7 @@ const AuthPage = () => {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
+                  minLength={6}
                   data-testid="input-password"
                 />
                 <Button
@@ -212,6 +217,9 @@ const AuthPage = () => {
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
               </div>
+              {mode === "register" && (
+                <p className="text-xs text-muted-foreground">Minimum 6 characters</p>
+              )}
             </div>
 
             <Button
@@ -234,7 +242,12 @@ const AuthPage = () => {
               <button
                 type="button"
                 className="text-primary font-medium hover:underline"
-                onClick={() => setMode(mode === "login" ? "register" : "login")}
+                onClick={() => {
+                  setMode(mode === "login" ? "register" : "login");
+                  setName("");
+                  setEmail("");
+                  setPassword("");
+                }}
               >
                 {mode === "login" ? "Sign Up" : "Sign In"}
               </button>
