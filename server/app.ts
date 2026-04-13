@@ -1,6 +1,8 @@
 import express from "express";
 import compression from "compression";
 import session from "express-session";
+import ConnectPgSimple from "connect-pg-simple";
+import pg from "pg";
 import path from "path";
 import fs from "fs";
 import { registerRoutes } from "./routes";
@@ -26,8 +28,37 @@ if (!isCloudStorageConfigured()) {
 
 const isProd = process.env.NODE_ENV === "production";
 
+// ─── SESSION STORE ─────────────────────────────────────────────────────────
+// Always use PostgreSQL-backed sessions so they survive serverless cold-starts,
+// multiple instances, and deployments (Vercel, Replit, etc.).
+// connect-pg-simple needs a standard pg.Pool — this works with Neon via TCP too.
+function buildSessionStore() {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    console.warn("[session] No DATABASE_URL — falling back to in-memory sessions (dev only)");
+    return undefined;
+  }
+
+  const PgStore = ConnectPgSimple(session);
+  const pool = new pg.Pool({
+    connectionString,
+    ssl: isProd ? { rejectUnauthorized: false } : false,
+    max: 5,
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 5_000,
+  });
+
+  return new PgStore({
+    pool,
+    createTableIfMissing: true,
+    tableName: "session",
+    pruneSessionInterval: 60 * 15,
+  });
+}
+
 app.use(
   session({
+    store: buildSessionStore(),
     secret: process.env.SESSION_SECRET || "ecotrack-dev-secret-change-in-prod",
     resave: false,
     saveUninitialized: false,
