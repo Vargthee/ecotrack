@@ -136,7 +136,7 @@ function FileUploadZone({ field, label, hint, accept, icon: Icon = Upload, uploa
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
         className={cn(
-          "border-2 border-dashed rounded-lg p-8 text-center transition-all select-none",
+          "border-2 border-dashed rounded-lg p-4 sm:p-8 text-center transition-all select-none",
           !uploadState.uploading && "cursor-pointer",
           dragOver && "border-primary bg-primary/5 scale-[1.01]",
           isUploaded && "border-success/40 bg-success/5",
@@ -337,7 +337,7 @@ const DriverKYCPage = () => {
           <p className="text-sm text-muted-foreground">Identity and vehicle verification</p>
         </div>
         <Card>
-          <CardContent className="p-8 space-y-5">
+          <CardContent className="p-5 sm:p-8 space-y-5">
             <div className="flex flex-col items-center text-center space-y-3">
               <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
                 status === "approved" ? "bg-success/15" : status === "rejected" ? "bg-destructive/15" : "bg-warning/15"

@@ -221,16 +221,16 @@ export function DriverDashboard() {
   return (
     <div className="space-y-5 max-w-3xl mx-auto">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-foreground truncate">
             {getGreeting()}, {user?.name?.split(" ")[0] || "Driver"} 🚛
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {totalPendingJobs > 0 && (
             <Badge className="bg-destructive text-destructive-foreground text-[10px] animate-pulse">
               {totalPendingJobs} pending

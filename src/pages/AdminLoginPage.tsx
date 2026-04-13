@@ -24,12 +24,12 @@ const AdminLoginPage = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      const success = await login(email, password, "admin");
-      if (success) {
+      const error = await login(email, password, "admin");
+      if (!error) {
         toast.success("Welcome back, Admin");
         navigate("/admin");
       } else {
-        toast.error("Invalid credentials");
+        toast.error(error);
       }
     } catch {
       toast.error("Something went wrong");
