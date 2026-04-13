@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "-XVY0Ja4TkX5TStJK1hW8"
+uri = "file://DOCUMENTATION.md"
+type = "text"
+title = "EcoTrack — Project Documentation & Tech Stack"
