@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import { queryClient } from "@/lib/queryClient";
 
 export type UserRole = "user" | "driver" | "admin";
 
@@ -70,6 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return res.status === 401 ? "Incorrect email or password" : msg;
       }
       const data = await res.json();
+      queryClient.clear();
       setUser(mapApiUser(data));
       return null;
     } catch {
@@ -92,6 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return res.status === 409 ? "An account with this email already exists" : msg;
       }
       const data = await res.json();
+      queryClient.clear();
       setUser(mapApiUser(data));
       return null;
     } catch {
@@ -103,6 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
     sessionStorage.removeItem("ecotrack_user");
     sessionStorage.removeItem("ecotrack_admin_auth");
+    queryClient.clear();
     setUser(null);
   }, []);
 
