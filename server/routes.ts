@@ -178,6 +178,7 @@ export function registerRoutes(app: Express) {
 
     req.session.userId = user.id;
     req.session.role = user.role;
+    await new Promise<void>((resolve, reject) => req.session.save((err) => err ? reject(err) : resolve()));
     res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
   });
 
@@ -200,6 +201,7 @@ export function registerRoutes(app: Express) {
 
     req.session.userId = user.id;
     req.session.role = user.role;
+    await new Promise<void>((resolve, reject) => req.session.save((err) => err ? reject(err) : resolve()));
     res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
   });
 
