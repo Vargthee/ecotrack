@@ -11,9 +11,12 @@ import {
 } from "./cloudStorage";
 import { eventBus, emitEvent } from "./eventBus";
 
-const uploadsDir = path.resolve(process.cwd(), "uploads");
+const uploadsDir = process.env.VERCEL
+  ? "/tmp/uploads"
+  : path.resolve(process.cwd(), "uploads");
+
 if (!isCloudStorageConfigured() && !fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+  try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch (_) {}
 }
 
 const upload = multer({

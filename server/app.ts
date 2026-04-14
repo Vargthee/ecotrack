@@ -8,10 +8,12 @@ import fs from "fs";
 import { registerRoutes } from "./routes";
 import { isCloudStorageConfigured } from "./cloudStorage";
 
-const uploadsDir = path.resolve(process.cwd(), "uploads");
+const uploadsDir = process.env.VERCEL
+  ? "/tmp/uploads"
+  : path.resolve(process.cwd(), "uploads");
 
 if (!isCloudStorageConfigured() && !fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+  try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch (_) {}
 }
 
 const app = express();
