@@ -67,6 +67,14 @@ app.use(
 
 registerRoutes(app);
 
+// ── JSON error handler (must be after routes) ────────────────────────────────
+app.use((err: any, _req: any, res: any, _next: any) => {
+  const status = err.status || err.statusCode || 500;
+  const message = err.message || "Internal server error";
+  console.error("[error]", status, message);
+  res.status(status).json({ error: message });
+});
+
 // ── Cold-start DB init ───────────────────────────────────────────────────────
 const ready = (async () => {
   if (!DATABASE_URL) return;

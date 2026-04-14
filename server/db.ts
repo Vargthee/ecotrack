@@ -14,7 +14,7 @@ export async function initDb() {
   }
 
   try {
-    const isNeon = connectionString.includes("neon.tech") || !!process.env.VERCEL;
+    const isNeon = connectionString.includes("neon.tech") || connectionString.includes(".neon.db");
 
     if (isNeon) {
       const { neon } = await import("@neondatabase/serverless");

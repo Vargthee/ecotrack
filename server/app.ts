@@ -73,4 +73,12 @@ app.use(
 
 registerRoutes(app);
 
+// ── JSON error handler (must be after routes) ────────────────────────────────
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const status = err.status || err.statusCode || 500;
+  const message = err.message || "Internal server error";
+  console.error("[error]", status, message);
+  res.status(status).json({ error: message });
+});
+
 export { app };
