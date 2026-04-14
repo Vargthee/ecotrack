@@ -9,18 +9,23 @@ import { registerRoutes } from "../server/routes";
 
 const app = express();
 
+// Required so Express reads the real client IP and protocol from Vercel's
+// reverse-proxy headers — necessary for secure cookies and rate limiting.
+app.set("trust proxy", 1);
+
 app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const PgSession = ConnectPgSimple(session);
 
+// Always use SSL for the session pool — needed for Neon and most hosted Postgres.
 const sessionPool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes("neon.tech")
-    ? { rejectUnauthorized: false }
-    : false,
+  ssl: { rejectUnauthorized: false },
   max: 2,
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 5_000,
 });
 
 app.use(
@@ -28,13 +33,16 @@ app.use(
     store: new PgSession({
       pool: sessionPool,
       createTableIfMissing: true,
+      tableName: "session",
+      pruneSessionInterval: 60 * 15,
     }),
     secret: process.env.SESSION_SECRET || "ecotrack-dev-secret-change-in-prod",
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: true,
+      secure: true,      // Vercel always serves over HTTPS
       httpOnly: true,
+      sameSite: "lax",   // prevents CSRF while allowing normal same-site navigation
       maxAge: 7 * 24 * 60 * 60 * 1000,
     },
   })

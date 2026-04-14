@@ -96,10 +96,10 @@ const MAX_PASSWORD_LENGTH = 72;
 export function registerRoutes(app: Express) {
 
   // ─── SESSION SECRET GUARD ──────────────────────────────────────────────────
-
+  // Log a warning but do NOT call process.exit() — in serverless environments
+  // (Vercel) that would crash every function invocation with a 500 error.
   if (process.env.NODE_ENV === "production" && !process.env.SESSION_SECRET) {
-    console.error("[SECURITY] SESSION_SECRET env var is not set in production. Refusing to start.");
-    process.exit(1);
+    console.error("[SECURITY] SESSION_SECRET env var is not set in production — set it in your deployment environment variables.");
   }
 
   // ─── SERVER-SENT EVENTS ────────────────────────────────────────────────────
