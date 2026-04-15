@@ -10,6 +10,7 @@ import {
   generateFilename,
 } from "./cloudStorage";
 import { eventBus, emitEvent } from "./eventBus";
+import { signToken, verifyToken, COOKIE_NAME, MAX_AGE_MS } from "./auth";
 
 const uploadsDir = process.env.VERCEL
   ? "/tmp/uploads"
@@ -67,27 +68,37 @@ setInterval(() => {
 
 // ─── AUTH MIDDLEWARE ────────────────────────────────────────────────────────
 
-declare module "express-session" {
-  interface SessionData {
-    userId: number;
-    role: string;
+declare global {
+  namespace Express {
+    interface Request {
+      jwtUser?: { userId: number; role: string };
+    }
   }
 }
 
+function jwtAuth(req: Request, _res: Response, next: NextFunction) {
+  const token = req.cookies?.[COOKIE_NAME];
+  if (token) {
+    const payload = verifyToken(token);
+    if (payload) req.jwtUser = payload;
+  }
+  next();
+}
+
 function requireAuth(req: Request, res: Response, next: NextFunction) {
-  if (!req.session?.userId) return res.status(401).json({ error: "Not authenticated" });
+  if (!req.jwtUser) return res.status(401).json({ error: "Not authenticated" });
   next();
 }
 
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  if (!req.session?.userId) return res.status(401).json({ error: "Not authenticated" });
-  if (req.session.role !== "admin") return res.status(403).json({ error: "Admin only" });
+  if (!req.jwtUser) return res.status(401).json({ error: "Not authenticated" });
+  if (req.jwtUser.role !== "admin") return res.status(403).json({ error: "Admin only" });
   next();
 }
 
 function requireDriver(req: Request, res: Response, next: NextFunction) {
-  if (!req.session?.userId) return res.status(401).json({ error: "Not authenticated" });
-  if (req.session.role !== "driver" && req.session.role !== "admin") {
+  if (!req.jwtUser) return res.status(401).json({ error: "Not authenticated" });
+  if (req.jwtUser.role !== "driver" && req.jwtUser.role !== "admin") {
     return res.status(403).json({ error: "Drivers only" });
   }
   next();
@@ -98,11 +109,11 @@ const MAX_PASSWORD_LENGTH = 72;
 
 export function registerRoutes(app: Express) {
 
-  // ─── SESSION SECRET GUARD ──────────────────────────────────────────────────
-  // Log a warning but do NOT call process.exit() — in serverless environments
-  // (Vercel) that would crash every function invocation with a 500 error.
+  // Parse JWT from cookie on every request
+  app.use(jwtAuth);
+
   if (process.env.NODE_ENV === "production" && !process.env.SESSION_SECRET) {
-    console.error("[SECURITY] SESSION_SECRET env var is not set in production — set it in your deployment environment variables.");
+    console.error("[SECURITY] SESSION_SECRET env var is not set — set it in your deployment environment variables.");
   }
 
   // ─── SERVER-SENT EVENTS ────────────────────────────────────────────────────
@@ -179,9 +190,13 @@ export function registerRoutes(app: Express) {
 
     if (role === "user") await storage.addPoints(user.id, "Welcome bonus", 50);
 
-    req.session.userId = user.id;
-    req.session.role = user.role;
-    await new Promise<void>((resolve, reject) => req.session.save((err) => err ? reject(err) : resolve()));
+    const token = signToken({ userId: user.id, role: user.role });
+    res.cookie(COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: MAX_AGE_MS,
+    });
     res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
   });
 
@@ -202,19 +217,24 @@ export function registerRoutes(app: Express) {
     const ok = await storage.verifyPassword(parsed.data.password, user.passwordHash);
     if (!ok) return res.status(401).json({ error: "Invalid credentials" });
 
-    req.session.userId = user.id;
-    req.session.role = user.role;
-    await new Promise<void>((resolve, reject) => req.session.save((err) => err ? reject(err) : resolve()));
+    const token = signToken({ userId: user.id, role: user.role });
+    res.cookie(COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: MAX_AGE_MS,
+    });
     res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
   });
 
-  app.post("/api/auth/logout", (req, res) => {
-    req.session.destroy(() => res.json({ ok: true }));
+  app.post("/api/auth/logout", (_req, res) => {
+    res.clearCookie(COOKIE_NAME);
+    res.json({ ok: true });
   });
 
   app.get("/api/auth/me", async (req, res) => {
-    if (!req.session?.userId) return res.status(401).json({ error: "Not authenticated" });
-    const user = await storage.getUserById(req.session.userId);
+    if (!req.jwtUser) return res.status(401).json({ error: "Not authenticated" });
+    const user = await storage.getUserById(req.jwtUser.userId);
     if (!user) return res.status(401).json({ error: "User not found" });
     res.json({ id: user.id, name: user.name, email: user.email, role: user.role, phone: user.phone, status: user.status });
   });
@@ -228,7 +248,7 @@ export function registerRoutes(app: Express) {
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
     if (!parsed.data.name && !parsed.data.phone) return res.status(400).json({ error: "No fields to update" });
 
-    const user = await storage.updateUserProfile(req.session.userId!, parsed.data);
+    const user = await storage.updateUserProfile(req.jwtUser!.userId, parsed.data);
     res.json({ id: user.id, name: user.name, email: user.email, role: user.role, phone: user.phone });
   });
 
@@ -240,13 +260,13 @@ export function registerRoutes(app: Express) {
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-    const user = await storage.getUserById(req.session.userId!);
+    const user = await storage.getUserById(req.jwtUser!.userId);
     if (!user) return res.status(401).json({ error: "User not found" });
 
     const ok = await storage.verifyPassword(parsed.data.currentPassword, user.passwordHash);
     if (!ok) return res.status(401).json({ error: "Current password is incorrect" });
 
-    await storage.changePassword(req.session.userId!, parsed.data.newPassword);
+    await storage.changePassword(req.jwtUser!.userId, parsed.data.newPassword);
     res.json({ ok: true });
   });
 
@@ -297,7 +317,7 @@ export function registerRoutes(app: Express) {
   // ─── DRIVER TASKS ─────────────────────────────────────────────────────────
 
   app.get("/api/tasks", requireAuth, async (req, res) => {
-    const user = await storage.getUserById(req.session.userId!);
+    const user = await storage.getUserById(req.jwtUser!.userId);
     if (!user) return res.status(401).json({ error: "User not found" });
     const tasks = user.role === "admin"
       ? await storage.getAllTasks()
@@ -334,12 +354,12 @@ export function registerRoutes(app: Express) {
     if (!task) return res.status(404).json({ error: "Task not found" });
 
     // Drivers can only complete tasks assigned to them; admins can complete any
-    if (req.session.role === "driver" && task.driverId !== req.session.userId) {
+    if (req.jwtUser!.role === "driver" && task.driverId !== req.jwtUser!.userId) {
       return res.status(403).json({ error: "You can only complete your own tasks" });
     }
 
-    const updated = await storage.completeTask(req.params.id, req.session.userId!);
-    await storage.addPoints(req.session.userId!, "Completed pickup", task.earning > 700 ? 20 : 15);
+    const updated = await storage.completeTask(req.params.id, req.jwtUser!.userId);
+    await storage.addPoints(req.jwtUser!.userId, "Completed pickup", task.earning > 700 ? 20 : 15);
     emitEvent({ type: "task:complete", data: { id: updated.id, driverId: updated.driverId } });
     res.json(updated);
   });
@@ -352,14 +372,14 @@ export function registerRoutes(app: Express) {
   // ─── DRIVER EARNINGS ──────────────────────────────────────────────────────
 
   app.get("/api/driver/earnings", requireDriver, async (req, res) => {
-    const earnings = await storage.getDriverEarnings(req.session.userId!);
+    const earnings = await storage.getDriverEarnings(req.jwtUser!.userId);
     res.json(earnings);
   });
 
   // ─── CITIZEN REPORTS ──────────────────────────────────────────────────────
 
   app.get("/api/reports", requireAuth, async (req, res) => {
-    const user = await storage.getUserById(req.session.userId!);
+    const user = await storage.getUserById(req.jwtUser!.userId);
     if (!user) return res.status(401).json({ error: "User not found" });
     const reports = (user.role === "admin" || user.role === "driver")
       ? await storage.getAllReports()
@@ -378,8 +398,8 @@ export function registerRoutes(app: Express) {
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-    const report = await storage.createReport({ userId: req.session.userId!, ...parsed.data });
-    await storage.addPoints(req.session.userId!, "Submitted report", 15);
+    const report = await storage.createReport({ userId: req.jwtUser!.userId, ...parsed.data });
+    await storage.addPoints(req.jwtUser!.userId, "Submitted report", 15);
     emitEvent({ type: "report:new", data: { id: report.id, reportType: report.type, description: report.description } });
     res.json(report);
   });
@@ -394,12 +414,12 @@ export function registerRoutes(app: Express) {
   // ─── PICKUP REQUESTS ──────────────────────────────────────────────────────
 
   app.get("/api/pickups", requireAuth, async (req, res) => {
-    const user = await storage.getUserById(req.session.userId!);
+    const user = await storage.getUserById(req.jwtUser!.userId);
     if (!user) return res.status(401).json({ error: "Unauthorized" });
     if (user.role === "driver" || user.role === "admin") {
       res.json(await storage.getAllPickups());
     } else {
-      res.json(await storage.getPickupsByUser(req.session.userId!));
+      res.json(await storage.getPickupsByUser(req.jwtUser!.userId));
     }
   });
 
@@ -413,14 +433,14 @@ export function registerRoutes(app: Express) {
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
     const { wasteType, address, notes } = parsed.data;
-    const pickup = await storage.createPickup(req.session.userId!, wasteType, address, notes);
-    await storage.addPoints(req.session.userId!, "Requested pickup", 10);
+    const pickup = await storage.createPickup(req.jwtUser!.userId, wasteType, address, notes);
+    await storage.addPoints(req.jwtUser!.userId, "Requested pickup", 10);
     emitEvent({ type: "pickup:new", data: { id: pickup.id, wasteType: pickup.wasteType, address: pickup.address ?? undefined } });
     res.json(pickup);
   });
 
   app.patch("/api/pickups/:id/accept", requireDriver, async (req, res) => {
-    const user = await storage.getUserById(req.session.userId!);
+    const user = await storage.getUserById(req.jwtUser!.userId);
     if (!user || user.role !== "driver") return res.status(403).json({ error: "Drivers only" });
     const pickup = await storage.updatePickupStatus(Number(req.params.id), "assigned", user.id);
     emitEvent({ type: "pickup:status", data: { id: pickup.id, status: "assigned", userId: pickup.userId } });
@@ -431,7 +451,7 @@ export function registerRoutes(app: Express) {
     const pickup = await storage.getPickupById(Number(req.params.id));
     if (!pickup) return res.status(404).json({ error: "Pickup not found" });
 
-    if (req.session.role === "driver" && pickup.driverId !== req.session.userId) {
+    if (req.jwtUser!.role === "driver" && pickup.driverId !== req.jwtUser!.userId) {
       return res.status(403).json({ error: "You are not assigned to this pickup" });
     }
 
@@ -444,7 +464,7 @@ export function registerRoutes(app: Express) {
     const pickup = await storage.getPickupById(Number(req.params.id));
     if (!pickup) return res.status(404).json({ error: "Pickup not found" });
 
-    if (req.session.role === "driver" && pickup.driverId !== req.session.userId) {
+    if (req.jwtUser!.role === "driver" && pickup.driverId !== req.jwtUser!.userId) {
       return res.status(403).json({ error: "You are not assigned to this pickup" });
     }
 
@@ -460,9 +480,9 @@ export function registerRoutes(app: Express) {
     const pickup = await storage.getPickupById(Number(req.params.id));
     if (!pickup) return res.status(404).json({ error: "Pickup not found" });
 
-    const isOwner = pickup.userId === req.session.userId;
-    const isAssignedDriver = pickup.driverId === req.session.userId;
-    const isAdmin = req.session.role === "admin";
+    const isOwner = pickup.userId === req.jwtUser!.userId;
+    const isAssignedDriver = pickup.driverId === req.jwtUser!.userId;
+    const isAdmin = req.jwtUser!.role === "admin";
 
     if (!isOwner && !isAssignedDriver && !isAdmin) {
       return res.status(403).json({ error: "You cannot cancel this pickup" });
@@ -489,8 +509,8 @@ export function registerRoutes(app: Express) {
 
   app.get("/api/eco-points", requireAuth, async (req, res) => {
     const [balance, log] = await Promise.all([
-      storage.getPointsByUser(req.session.userId!),
-      storage.getPointsLog(req.session.userId!),
+      storage.getPointsByUser(req.jwtUser!.userId),
+      storage.getPointsLog(req.jwtUser!.userId),
     ]);
     res.json({ balance, log });
   });
@@ -506,21 +526,21 @@ export function registerRoutes(app: Express) {
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Invalid input" });
 
-    const balance = await storage.getPointsByUser(req.session.userId!);
+    const balance = await storage.getPointsByUser(req.jwtUser!.userId);
     if (balance < parsed.data.cost) return res.status(400).json({ error: "Insufficient points" });
 
-    const entry = await storage.deductPoints(req.session.userId!, `Redeemed: ${parsed.data.rewardName}`, parsed.data.cost);
-    const newBalance = await storage.getPointsByUser(req.session.userId!);
+    const entry = await storage.deductPoints(req.jwtUser!.userId, `Redeemed: ${parsed.data.rewardName}`, parsed.data.cost);
+    const newBalance = await storage.getPointsByUser(req.jwtUser!.userId);
     res.json({ entry, newBalance });
   });
 
   // ─── SUBSCRIPTIONS ────────────────────────────────────────────────────────
 
   app.get("/api/subscription", requireAuth, async (req, res) => {
-    let sub = await storage.getSubscriptionByUser(req.session.userId!);
+    let sub = await storage.getSubscriptionByUser(req.jwtUser!.userId);
     if (!sub) {
       const nextBilling = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-      sub = await storage.upsertSubscription(req.session.userId!, {
+      sub = await storage.upsertSubscription(req.jwtUser!.userId, {
         planType: "basic", status: "active", billingCycle: "monthly",
         nextBillingDate: nextBilling, startedAt: new Date().toISOString().split("T")[0],
       });
@@ -535,21 +555,21 @@ export function registerRoutes(app: Express) {
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-    const sub = await storage.upsertSubscription(req.session.userId!, parsed.data as any);
+    const sub = await storage.upsertSubscription(req.jwtUser!.userId, parsed.data as any);
     res.json(sub);
   });
 
   // ─── DRIVER KYC ───────────────────────────────────────────────────────────
 
   app.get("/api/driver/kyc", requireAuth, async (req, res) => {
-    const user = await storage.getUserById(req.session.userId!);
+    const user = await storage.getUserById(req.jwtUser!.userId);
     if (!user || user.role !== "driver") return res.status(403).json({ error: "Drivers only" });
-    const kyc = await storage.getKycByDriver(req.session.userId!);
+    const kyc = await storage.getKycByDriver(req.jwtUser!.userId);
     res.json(kyc ?? null);
   });
 
   app.post("/api/driver/kyc", requireAuth, async (req, res) => {
-    const user = await storage.getUserById(req.session.userId!);
+    const user = await storage.getUserById(req.jwtUser!.userId);
     if (!user || user.role !== "driver") return res.status(403).json({ error: "Drivers only" });
     const schema = z.object({
       govtIdType: z.string().optional(),
@@ -563,7 +583,7 @@ export function registerRoutes(app: Express) {
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-    const kyc = await storage.upsertKyc(req.session.userId!, { ...parsed.data, status: "pending" });
+    const kyc = await storage.upsertKyc(req.jwtUser!.userId, { ...parsed.data, status: "pending" });
     res.json(kyc);
   });
 
