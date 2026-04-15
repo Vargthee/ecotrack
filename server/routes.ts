@@ -77,7 +77,11 @@ declare global {
 }
 
 function jwtAuth(req: Request, _res: Response, next: NextFunction) {
-  const token = req.cookies?.[COOKIE_NAME];
+  // Accept JWT from cookie OR Authorization: Bearer header (whichever is present)
+  const bearerToken = req.headers.authorization?.startsWith("Bearer ")
+    ? req.headers.authorization.slice(7)
+    : undefined;
+  const token = req.cookies?.[COOKIE_NAME] || bearerToken;
   if (token) {
     const payload = verifyToken(token);
     if (payload) req.jwtUser = payload;
@@ -197,7 +201,7 @@ export function registerRoutes(app: Express) {
       sameSite: "lax",
       maxAge: MAX_AGE_MS,
     });
-    res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
+    res.json({ id: user.id, name: user.name, email: user.email, role: user.role, token });
   });
 
   app.post("/api/auth/login", authRateLimit, async (req, res) => {
@@ -224,7 +228,7 @@ export function registerRoutes(app: Express) {
       sameSite: "lax",
       maxAge: MAX_AGE_MS,
     });
-    res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
+    res.json({ id: user.id, name: user.name, email: user.email, role: user.role, token });
   });
 
   app.post("/api/auth/logout", (_req, res) => {
