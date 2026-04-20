@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, getStoredToken, setStoredToken, clearStoredToken } from "@/lib/queryClient";
 
 export type UserRole = "user" | "driver" | "admin";
 
@@ -43,12 +43,22 @@ async function extractError(res: Response): Promise<string> {
   }
 }
 
+function authHeaders(extra?: Record<string, string>): Record<string, string> {
+  const headers: Record<string, string> = { ...extra };
+  const token = getStoredToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  return headers;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/auth/me", { credentials: "include" })
+    fetch("/api/auth/me", {
+      credentials: "include",
+      headers: authHeaders(),
+    })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data) setUser(mapApiUser(data));
@@ -57,7 +67,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setIsLoading(false));
   }, []);
 
-  // Returns null on success, error string on failure
   const login = useCallback(async (email: string, password: string, _role: UserRole): Promise<string | null> => {
     try {
       const res = await fetch("/api/auth/login", {
@@ -71,6 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return res.status === 401 ? "Incorrect email or password" : msg;
       }
       const data = await res.json();
+      if (data.token) setStoredToken(data.token);
       queryClient.clear();
       setUser(mapApiUser(data));
       return null;
@@ -79,7 +89,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Returns null on success, error string on failure
   const register = useCallback(async (name: string, email: string, password: string, role: UserRole): Promise<string | null> => {
     if (role === "admin") return "Admin accounts cannot be created here";
     try {
@@ -94,6 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return res.status === 409 ? "An account with this email already exists" : msg;
       }
       const data = await res.json();
+      if (data.token) setStoredToken(data.token);
       queryClient.clear();
       setUser(mapApiUser(data));
       return null;
@@ -104,6 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => {
     fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
+    clearStoredToken();
     sessionStorage.removeItem("ecotrack_user");
     sessionStorage.removeItem("ecotrack_admin_auth");
     queryClient.clear();

@@ -195,10 +195,11 @@ export function registerRoutes(app: Express) {
     if (role === "user") await storage.addPoints(user.id, "Welcome bonus", 50);
 
     const token = signToken({ userId: user.id, role: user.role });
+    const isProd = process.env.NODE_ENV === "production";
     res.cookie(COOKIE_NAME, token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
       maxAge: MAX_AGE_MS,
     });
     res.json({ id: user.id, name: user.name, email: user.email, role: user.role, token });
@@ -222,17 +223,23 @@ export function registerRoutes(app: Express) {
     if (!ok) return res.status(401).json({ error: "Invalid credentials" });
 
     const token = signToken({ userId: user.id, role: user.role });
+    const isProd = process.env.NODE_ENV === "production";
     res.cookie(COOKIE_NAME, token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
       maxAge: MAX_AGE_MS,
     });
     res.json({ id: user.id, name: user.name, email: user.email, role: user.role, token });
   });
 
   app.post("/api/auth/logout", (_req, res) => {
-    res.clearCookie(COOKIE_NAME);
+    const isProd = process.env.NODE_ENV === "production";
+    res.clearCookie(COOKIE_NAME, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
+    });
     res.json({ ok: true });
   });
 
