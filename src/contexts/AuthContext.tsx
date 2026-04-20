@@ -36,10 +36,15 @@ function mapApiUser(u: any): AuthUser {
 
 async function extractError(res: Response): Promise<string> {
   try {
-    const data = await res.json();
-    return data?.error || data?.message || "Something went wrong";
+    const text = await res.text();
+    // If the response is HTML (e.g. a gateway error page), report the status
+    if (text.trimStart().startsWith("<")) {
+      return `Server error (${res.status}) — please try again or contact support`;
+    }
+    const data = JSON.parse(text);
+    return data?.error || data?.message || `Request failed with status ${res.status}`;
   } catch {
-    return "Something went wrong";
+    return `Server error (${res.status}) — please try again`;
   }
 }
 
