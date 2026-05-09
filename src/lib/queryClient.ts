@@ -21,12 +21,28 @@ export async function apiRequest<T = unknown>(
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30 * 1000,
+      staleTime: 3 * 60 * 1000,
+      gcTime: 15 * 60 * 1000,
       refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
+      retry: 1,
+      retryDelay: 500,
+      networkMode: "always",
       queryFn: async ({ queryKey }) => {
         const [path] = queryKey as [string, ...unknown[]];
         return apiRequest("GET", path);
       },
     },
+    mutations: {
+      retry: 0,
+      networkMode: "always",
+    },
   },
 });
+
+export function prefetch(path: string) {
+  return queryClient.prefetchQuery({
+    queryKey: [path],
+    staleTime: 3 * 60 * 1000,
+  });
+}

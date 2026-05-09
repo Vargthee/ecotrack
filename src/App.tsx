@@ -10,39 +10,88 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import { FloatingChatbot } from "@/components/FloatingChatbot";
 
-const LandingPage = lazy(() => import("./pages/LandingPage"));
-const MapPage = lazy(() => import("./pages/MapPage"));
-const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
-const DriverPage = lazy(() => import("./pages/DriverPage"));
-const ReportsPage = lazy(() => import("./pages/ReportsPage"));
-const PricingPage = lazy(() => import("./pages/PricingPage"));
-const BillingPage = lazy(() => import("./pages/BillingPage"));
-const AdminPage = lazy(() => import("./pages/AdminPage"));
+const LandingPage    = lazy(() => import("./pages/LandingPage"));
+const MapPage        = lazy(() => import("./pages/MapPage"));
+const AnalyticsPage  = lazy(() => import("./pages/AnalyticsPage"));
+const DriverPage     = lazy(() => import("./pages/DriverPage"));
+const ReportsPage    = lazy(() => import("./pages/ReportsPage"));
+const PricingPage    = lazy(() => import("./pages/PricingPage"));
+const BillingPage    = lazy(() => import("./pages/BillingPage"));
+const AdminPage      = lazy(() => import("./pages/AdminPage"));
 const AdminLoginPage = lazy(() => import("./pages/AdminLoginPage"));
-const AuthPage = lazy(() => import("./pages/AuthPage"));
-const UserDashboard = lazy(() => import("./pages/UserDashboard"));
-const EcoPointsPage = lazy(() => import("./pages/EcoPointsPage"));
-const DriverKYCPage = lazy(() => import("./pages/DriverKYCPage"));
-const NotFound = lazy(() => import("./pages/NotFound"));
+const AuthPage       = lazy(() => import("./pages/AuthPage"));
+const UserDashboard  = lazy(() => import("./pages/UserDashboard"));
+const EcoPointsPage  = lazy(() => import("./pages/EcoPointsPage"));
+const DriverKYCPage  = lazy(() => import("./pages/DriverKYCPage"));
+const NotFound       = lazy(() => import("./pages/NotFound"));
 
-function PageLoader() {
+/* ── Skeleton fallbacks ── */
+function BarsSkeleton() {
   return (
-    <div className="flex items-center justify-center h-[50vh]">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+    <div className="space-y-4 p-1 animate-fade-in">
+      <div className="skeleton h-8 w-48" />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[1,2,3,4].map(i => <div key={i} className="skeleton h-24 rounded-xl" />)}
+      </div>
+      <div className="skeleton h-40 rounded-xl" />
+      <div className="grid md:grid-cols-2 gap-4">
+        <div className="skeleton h-52 rounded-xl" />
+        <div className="skeleton h-52 rounded-xl" />
+      </div>
+    </div>
+  );
+}
+
+function MapSkeleton() {
+  return (
+    <div className="space-y-4 p-1 animate-fade-in">
+      <div className="skeleton h-8 w-56" />
+      <div className="skeleton h-[480px] rounded-xl" />
+      <div className="grid grid-cols-3 gap-3">
+        {[1,2,3].map(i => <div key={i} className="skeleton h-32 rounded-xl" />)}
+      </div>
+    </div>
+  );
+}
+
+function CardsSkeleton() {
+  return (
+    <div className="space-y-4 p-1 animate-fade-in">
+      <div className="skeleton h-8 w-40" />
+      <div className="grid gap-4 md:grid-cols-2">
+        {[1,2,3,4].map(i => <div key={i} className="skeleton h-40 rounded-xl" />)}
+      </div>
+    </div>
+  );
+}
+
+function ListSkeleton() {
+  return (
+    <div className="space-y-3 p-1 animate-fade-in">
+      <div className="skeleton h-8 w-44" />
+      {[1,2,3,4,5].map(i => <div key={i} className="skeleton h-20 rounded-xl" />)}
+    </div>
+  );
+}
+
+function SpinnerOnly() {
+  return (
+    <div className="flex items-center justify-center h-[50vh] animate-fade-in">
+      <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-primary border-t-transparent" />
     </div>
   );
 }
 
 function ProtectedLayout() {
   const { isAuthenticated, isLoading } = useAuth();
-  if (isLoading) return <PageLoader />;
+  if (isLoading) return <SpinnerOnly />;
   if (!isAuthenticated) return <Navigate to="/auth" replace />;
   return <AppLayout />;
 }
 
 function AuthGuard() {
   const { isAuthenticated, isLoading, user } = useAuth();
-  if (isLoading) return <PageLoader />;
+  if (isLoading) return <SpinnerOnly />;
   if (!isAuthenticated) return <AuthPage />;
   if (user?.role === "driver") return <Navigate to="/driver" replace />;
   if (user?.role === "admin") return <Navigate to="/admin" replace />;
@@ -57,26 +106,24 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
-            <Suspense fallback={<PageLoader />}>
-              <Routes>
-                <Route path="/" element={<LandingPage />} />
-                <Route path="/auth" element={<AuthGuard />} />
-                <Route path="/admin/login" element={<AdminLoginPage />} />
-                <Route element={<ProtectedLayout />}>
-                  <Route path="/map" element={<MapPage />} />
-                  <Route path="/analytics" element={<AnalyticsPage />} />
-                  <Route path="/driver" element={<DriverPage />} />
-                  <Route path="/driver/kyc" element={<DriverKYCPage />} />
-                  <Route path="/reports" element={<ReportsPage />} />
-                  <Route path="/pricing" element={<PricingPage />} />
-                  <Route path="/billing" element={<BillingPage />} />
-                  <Route path="/admin" element={<AdminPage />} />
-                  <Route path="/user-dashboard" element={<UserDashboard />} />
-                  <Route path="/eco-points" element={<EcoPointsPage />} />
-                </Route>
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Suspense>
+            <Routes>
+              <Route path="/" element={<Suspense fallback={<SpinnerOnly />}><LandingPage /></Suspense>} />
+              <Route path="/auth" element={<Suspense fallback={<SpinnerOnly />}><AuthGuard /></Suspense>} />
+              <Route path="/admin/login" element={<Suspense fallback={<SpinnerOnly />}><AdminLoginPage /></Suspense>} />
+              <Route element={<ProtectedLayout />}>
+                <Route path="/user-dashboard" element={<Suspense fallback={<BarsSkeleton />}><UserDashboard /></Suspense>} />
+                <Route path="/eco-points"     element={<Suspense fallback={<CardsSkeleton />}><EcoPointsPage /></Suspense>} />
+                <Route path="/map"            element={<Suspense fallback={<MapSkeleton />}><MapPage /></Suspense>} />
+                <Route path="/analytics"      element={<Suspense fallback={<BarsSkeleton />}><AnalyticsPage /></Suspense>} />
+                <Route path="/driver"         element={<Suspense fallback={<ListSkeleton />}><DriverPage /></Suspense>} />
+                <Route path="/driver/kyc"     element={<Suspense fallback={<CardsSkeleton />}><DriverKYCPage /></Suspense>} />
+                <Route path="/reports"        element={<Suspense fallback={<ListSkeleton />}><ReportsPage /></Suspense>} />
+                <Route path="/pricing"        element={<Suspense fallback={<CardsSkeleton />}><PricingPage /></Suspense>} />
+                <Route path="/billing"        element={<Suspense fallback={<CardsSkeleton />}><BillingPage /></Suspense>} />
+                <Route path="/admin"          element={<Suspense fallback={<BarsSkeleton />}><AdminPage /></Suspense>} />
+              </Route>
+              <Route path="*" element={<Suspense fallback={<SpinnerOnly />}><NotFound /></Suspense>} />
+            </Routes>
             <FloatingChatbot />
           </BrowserRouter>
         </SubscriptionProvider>

@@ -57,6 +57,13 @@
 
     --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
     --font-mono: 'IBM Plex Mono', monospace;
+
+    /* Motion tokens */
+    --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+    --dur-fast: 120ms;
+    --dur-base: 180ms;
+    --dur-slow: 280ms;
   }
 
   .dark {
@@ -103,12 +110,37 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
   }
+
+  /* Global interactive transitions — GPU-composited properties only */
+  button, a, [role="button"] {
+    transition: opacity var(--dur-fast) var(--ease-smooth),
+                background-color var(--dur-fast) var(--ease-smooth),
+                color var(--dur-fast) var(--ease-smooth),
+                box-shadow var(--dur-fast) var(--ease-smooth),
+                transform var(--dur-fast) var(--ease-spring);
+    will-change: transform;
+  }
+  button:active, [role="button"]:active {
+    transform: scale(0.97);
+  }
+
+  /* Cards */
+  .card-hover {
+    transition: transform var(--dur-base) var(--ease-spring),
+                box-shadow var(--dur-base) var(--ease-spring);
+    will-change: transform;
+  }
+  .card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px -4px hsl(var(--primary) / 0.12);
+  }
 }
 
-@keyframes fade-in-up {
+/* ── Page entrance animation ── */
+@keyframes page-enter {
   from {
     opacity: 0;
-    transform: translateY(22px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -116,33 +148,55 @@
   }
 }
 
+.page-enter {
+  animation: page-enter 0.22s var(--ease-spring) both;
+  will-change: opacity, transform;
+}
+
+/* ── Skeleton shimmer ── */
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 25%,
+    hsl(var(--muted-foreground) / 0.08) 50%,
+    hsl(var(--muted)) 75%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--radius);
+}
+
+/* ── Fade/slide utilities ── */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 @keyframes fade-in {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
-
 @keyframes scale-in {
-  from {
-    opacity: 0;
-    transform: scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
 
 @layer utilities {
-  .animate-fade-in-up {
-    animation: fade-in-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-  .animate-fade-in {
-    animation: fade-in 0.45s ease both;
-  }
-  .animate-scale-in {
-    animation: scale-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-  .delay-75  { animation-delay: 75ms;  }
+  .animate-fade-in-up   { animation: fade-in-up 0.4s var(--ease-spring) both; }
+  .animate-fade-in      { animation: fade-in 0.3s var(--ease-smooth) both; }
+  .animate-scale-in     { animation: scale-in 0.3s var(--ease-spring) both; }
+  .animate-slide-right  { animation: slide-in-right 0.25s var(--ease-spring) both; }
+
+  .delay-50  { animation-delay: 50ms; }
+  .delay-75  { animation-delay: 75ms; }
   .delay-100 { animation-delay: 100ms; }
   .delay-150 { animation-delay: 150ms; }
   .delay-200 { animation-delay: 200ms; }
@@ -150,6 +204,12 @@
   .delay-300 { animation-delay: 300ms; }
   .delay-400 { animation-delay: 400ms; }
   .delay-500 { animation-delay: 500ms; }
+
+  /* Smooth focus rings */
+  .focus-ring {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+    transition: box-shadow var(--dur-fast) var(--ease-smooth);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
