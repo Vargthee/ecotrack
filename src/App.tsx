@@ -133,6 +133,8 @@ const App = () => (
               <Routes>
                 <Route path="/" element={<Suspense fallback={<SpinnerOnly />}><LandingPage /></Suspense>} />
                 <Route path="/auth" element={<Suspense fallback={<SpinnerOnly />}><AuthGuard /></Suspense>} />
+                <Route path="/login" element={<Navigate to="/auth" replace />} />
+                <Route path="/register" element={<Navigate to="/auth" replace />} />
                 <Route path="/admin/login" element={<Suspense fallback={<SpinnerOnly />}><AdminLoginPage /></Suspense>} />
                 <Route element={<ProtectedLayout />}>
                   <Route path="/user-dashboard" element={<UserOnlyRoute><Suspense fallback={<BarsSkeleton />}><UserDashboard /></Suspense></UserOnlyRoute>} />

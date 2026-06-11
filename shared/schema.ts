@@ -70,6 +70,8 @@ export const pickupRequests = pgTable("pickup_requests", {
   driverId: integer("driver_id").references(() => users.id),
   notes: text("notes"),
   address: text("address"),
+  scheduledDate: text("scheduled_date"),
+  timeSlot: text("time_slot"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -110,6 +112,12 @@ export const subscriptions = pgTable("subscriptions", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const rateLimits = pgTable("rate_limits", {
+  key: text("key").primaryKey(),
+  count: integer("count").notNull().default(1),
+  resetAt: timestamp("reset_at").notNull(),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertBinSchema = createInsertSchema(wasteBins);
 export const insertTaskSchema = createInsertSchema(driverTasks).omit({ createdAt: true });
@@ -128,3 +136,4 @@ export type PickupRequest = typeof pickupRequests.$inferSelect;
 export type EcoPointsEntry = typeof ecoPointsLog.$inferSelect;
 export type Subscription = typeof subscriptions.$inferSelect;
 export type DriverKyc = typeof driverKyc.$inferSelect;
+export type RateLimit = typeof rateLimits.$inferSelect;

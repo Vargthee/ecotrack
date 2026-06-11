@@ -1,0 +1,1 @@
+- [EcoTrack full-stack patterns](ecotrack-patterns.md) — key quirks: node-postgres (NOT Neon), session auth, role-based /api/analytics, scheduling fields on pickups

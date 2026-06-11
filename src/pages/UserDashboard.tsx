@@ -18,7 +18,7 @@ import { BinStatusBadge } from "@/components/BinStatusBadge";
 import { PickupTrackerCard } from "@/components/PickupTrackerCard";
 
 type Bin = { id: string; location: string; fillLevel: number; type: string };
-type Pickup = { id: number; wasteType: string; status: string; createdAt: string };
+type Pickup = { id: number; wasteType: string; status: string; createdAt: string; scheduledDate?: string; timeSlot?: string };
 type PointsData = { balance: number; log: { id: number; action: string; points: number }[] };
 
 
@@ -47,7 +47,21 @@ const UserDashboard = () => {
   const navigate = useNavigate();
   const [showNotifications, setShowNotifications] = useState(false);
   const [selectedWasteType, setSelectedWasteType] = useState("general");
+  const [selectedDate, setSelectedDate] = useState<string>("asap");
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState<"morning" | "afternoon" | null>(null);
   const [trackedPickup, setTrackedPickup] = useState<{ id: number; wasteType: string } | null>(null);
+
+  const dateOptions = [
+    { id: "asap", label: "ASAP" },
+    ...Array.from({ length: 3 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() + i);
+      return {
+        id: d.toISOString().split("T")[0],
+        label: i === 0 ? "Today" : i === 1 ? "Tomorrow" : d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }),
+      };
+    }),
+  ];
 
   const { data: binsData = [], isLoading: binsLoading } = useQuery<Bin[]>({ queryKey: ["/api/bins"] });
   const { data: pickupsData = [], isLoading: pickupsLoading } = useQuery<Pickup[]>({ queryKey: ["/api/pickups"] });
@@ -76,14 +90,24 @@ const UserDashboard = () => {
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const pickupMutation = useMutation({
-    mutationFn: () => apiRequest<{ id: number; wasteType: string }>("POST", "/api/pickups", { wasteType: selectedWasteType }),
+    mutationFn: () => {
+      const body: Record<string, string> = { wasteType: selectedWasteType };
+      if (selectedDate !== "asap") {
+        body.scheduledDate = selectedDate;
+        if (selectedTimeSlot) body.timeSlot = selectedTimeSlot;
+      }
+      return apiRequest<{ id: number; wasteType: string }>("POST", "/api/pickups", body);
+    },
     onSuccess: (pickup) => {
+      const when = selectedDate === "asap" ? "shortly" : `on ${selectedDate}${selectedTimeSlot ? ` (${selectedTimeSlot})` : ""}`;
       toast.success("Pickup request submitted! +10 eco points", {
-        description: `A driver will be assigned for your ${selectedWasteType} pickup shortly.`,
+        description: `A driver will collect your ${selectedWasteType} waste ${when}.`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/pickups"] });
       queryClient.invalidateQueries({ queryKey: ["/api/eco-points"] });
       setTrackedPickup({ id: pickup.id, wasteType: pickup.wasteType ?? selectedWasteType });
+      setSelectedDate("asap");
+      setSelectedTimeSlot(null);
     },
     onError: () => toast.error("Failed to submit pickup request"),
   });
@@ -206,6 +230,58 @@ const UserDashboard = () => {
               </button>
             ))}
           </div>
+          {/* Date picker */}
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+              <Calendar className="h-3.5 w-3.5" /> Pickup Date
+            </p>
+            <div className="grid grid-cols-4 gap-2">
+              {dateOptions.map(opt => (
+                <button
+                  key={opt.id}
+                  data-testid={`button-date-${opt.id}`}
+                  onClick={() => { setSelectedDate(opt.id); if (opt.id === "asap") setSelectedTimeSlot(null); }}
+                  className={`p-2 rounded-lg border-2 text-xs font-medium transition-all text-center ${
+                    selectedDate === opt.id
+                      ? "border-primary bg-primary/5 text-foreground"
+                      : "border-border hover:border-primary/40 text-muted-foreground"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Time slot (only when a specific date is selected) */}
+          {selectedDate !== "asap" && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5" /> Preferred Time Slot
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: "morning" as const, label: "🌅 Morning", sub: "7am – 12pm" },
+                  { id: "afternoon" as const, label: "🌤 Afternoon", sub: "12pm – 5pm" },
+                ].map(slot => (
+                  <button
+                    key={slot.id}
+                    data-testid={`button-slot-${slot.id}`}
+                    onClick={() => setSelectedTimeSlot(prev => prev === slot.id ? null : slot.id)}
+                    className={`p-2.5 rounded-lg border-2 text-left transition-all ${
+                      selectedTimeSlot === slot.id
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary/40"
+                    }`}
+                  >
+                    <p className="text-xs font-medium text-foreground">{slot.label}</p>
+                    <p className="text-[10px] text-muted-foreground">{slot.sub}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <Button
             size="lg"
             className="w-full h-12 text-base font-semibold shadow"
@@ -215,6 +291,8 @@ const UserDashboard = () => {
           >
             {pickupMutation.isPending ? (
               <><div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent mr-2" /> Requesting…</>
+            ) : selectedDate !== "asap" ? (
+              <><Calendar className="h-5 w-5 mr-2" /> Schedule Pickup</>
             ) : (
               <><Truck className="h-5 w-5 mr-2" /> Request Pickup</>
             )}

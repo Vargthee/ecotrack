@@ -28,14 +28,11 @@ function getGreeting() {
   return "Good evening";
 }
 
-const weeklyData = [
-  { day: "Mon", amount: 4200 },
-  { day: "Tue", amount: 5600 },
-  { day: "Wed", amount: 3600 },
-  { day: "Thu", amount: 6000 },
-  { day: "Fri", amount: 4800 },
-  { day: "Sat", amount: 2600 },
-];
+type DriverAnalytics = {
+  dailyEarnings: { day: string; amount: number; tasks: number }[];
+  weeklyTotal: number; weeklyTasks: number;
+  completedCount: number; totalCount: number; totalEarnings: number;
+};
 
 type Task = {
   id: string; binId: string; location: string; fillLevel: number;
@@ -47,6 +44,7 @@ type Pickup = {
   id: number; userId: number; wasteType: string;
   status: string; driverId?: number; notes?: string;
   address?: string; createdAt: string;
+  scheduledDate?: string; timeSlot?: string;
 };
 
 type Bin = { id: string; location: string; lat: number; lng: number; fillLevel: number; type: string };
@@ -64,6 +62,14 @@ function createPickupIcon() {
     className: "",
     html: `<div style="background:#2563eb;color:#fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:12px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3)">📦</div>`,
     iconSize: [26, 26], iconAnchor: [13, 13],
+  });
+}
+
+function createStopIcon(num: number, color = "#ef4444") {
+  return L.divIcon({
+    className: "",
+    html: `<div style="background:${color};color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4)">${num}</div>`,
+    iconSize: [22, 22], iconAnchor: [11, 11],
   });
 }
 
@@ -100,23 +106,36 @@ function RouteMap({ tasks, pickups, bins }: { tasks: Task[]; pickups: Pickup[]; 
         {bins.map((bin) => {
           const fill = bin.fillLevel;
           const color = fill >= 80 ? "#ef4444" : fill >= 50 ? "#eab308" : "#22c55e";
-          const isPending = pendingBins.some((b) => b.id === bin.id);
+          const stopIndex = pendingBins.findIndex((b) => b.id === bin.id);
+          const isPending = stopIndex !== -1;
           return (
             <CircleMarker key={bin.id} center={[bin.lat, bin.lng]} radius={isPending ? 12 : 7}
               pathOptions={{ color, fillColor: color, fillOpacity: 0.7, weight: isPending ? 3 : 1 }}>
               <Popup>
                 <div className="text-xs space-y-0.5">
+                  {isPending && <p className="font-bold text-destructive">Stop #{stopIndex + 1}</p>}
                   <p className="font-bold">{bin.id}</p>
                   <p>{bin.location}</p>
                   <p>Fill: <strong>{bin.fillLevel}%</strong></p>
                 </div>
               </Popup>
               <Tooltip direction="top" offset={[0, -10]}>
-                <span className="text-[10px]">{bin.location} — {bin.fillLevel}%</span>
+                <span className="text-[10px]">{isPending ? `Stop #${stopIndex + 1} · ` : ""}{bin.location} — {bin.fillLevel}%</span>
               </Tooltip>
             </CircleMarker>
           );
         })}
+        {pendingBins.map((bin, i) => (
+          <Marker key={`stop-${bin.id}`} position={[bin.lat, bin.lng]} icon={createStopIcon(i + 1, i === 0 ? "#ef4444" : i < 3 ? "#eab308" : "#6b7280")}>
+            <Popup>
+              <div className="text-xs">
+                <p className="font-bold text-destructive">Stop #{i + 1}</p>
+                <p>{bin.location}</p>
+                <p>Fill: <strong>{bin.fillLevel}%</strong></p>
+              </div>
+            </Popup>
+          </Marker>
+        ))}
         {activePickups.map((p) => {
           const lat = JOS_CENTER[0] + (((p.id * 7) % 100) / 1000 - 0.05);
           const lng = JOS_CENTER[1] + (((p.id * 13) % 100) / 1000 - 0.05);
@@ -150,6 +169,7 @@ export function DriverDashboard() {
   const { data: tasks = [], isLoading: tasksLoading } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
   const { data: pickups = [], isLoading: pickupsLoading } = useQuery<Pickup[]>({ queryKey: ["/api/pickups"] });
   const { data: bins = [] } = useQuery<Bin[]>({ queryKey: ["/api/bins"] });
+  const { data: analyticsData } = useQuery<DriverAnalytics>({ queryKey: ["/api/analytics"] });
 
   const completeMutation = useMutation({
     mutationFn: (id: string) => apiRequest("PATCH", `/api/tasks/${id}/complete`),
@@ -390,9 +410,16 @@ export function DriverDashboard() {
                           <p className="text-sm font-semibold text-foreground">{wasteTypeLabel[job.wasteType] ?? job.wasteType} Pickup</p>
                           {job.address && <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1"><MapPin className="h-3 w-3" />{job.address}</p>}
                           {job.notes && <p className="text-xs text-muted-foreground mt-1 italic">"{job.notes}"</p>}
-                          <p className="text-[10px] text-muted-foreground mt-1">
-                            {new Date(job.createdAt).toLocaleDateString("en-NG", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                          </p>
+                          {job.scheduledDate ? (
+                            <p className="text-[10px] text-primary mt-1 flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              Scheduled: {job.scheduledDate}{job.timeSlot ? ` · ${job.timeSlot}` : ""}
+                            </p>
+                          ) : (
+                            <p className="text-[10px] text-muted-foreground mt-1">
+                              {new Date(job.createdAt).toLocaleDateString("en-NG", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                            </p>
+                          )}
                         </div>
                         <Button size="sm" className="h-8 text-xs bg-success hover:bg-success/90 text-success-foreground shrink-0"
                           onClick={() => acceptMutation.mutate(job.id)} disabled={acceptMutation.isPending}
@@ -418,6 +445,12 @@ export function DriverDashboard() {
                           <p className="text-sm font-semibold text-foreground">{wasteTypeLabel[job.wasteType] ?? job.wasteType} Pickup</p>
                           {job.address && <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1"><MapPin className="h-3 w-3" />{job.address}</p>}
                           {job.notes && <p className="text-xs text-muted-foreground mt-1 italic">"{job.notes}"</p>}
+                          {job.scheduledDate && (
+                            <p className="text-[10px] text-primary mt-1 flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              Scheduled: {job.scheduledDate}{job.timeSlot ? ` · ${job.timeSlot}` : ""}
+                            </p>
+                          )}
                         </div>
                         <div className="flex flex-col gap-1.5 shrink-0">
                           {job.status === "assigned" && (
@@ -496,19 +529,25 @@ export function DriverDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={160}>
-                <BarChart data={weeklyData}>
-                  <XAxis dataKey="day" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
-                  <RechartTooltip
-                    contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "11px" }}
-                    formatter={(v: number) => [`₦${v.toLocaleString()}`, "Earnings"]}
-                  />
-                  <Bar dataKey="amount" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-              <p className="text-xs text-right text-muted-foreground pt-2">
-                Week total: <span className="font-semibold text-foreground">₦{weeklyData.reduce((s, d) => s + d.amount, 0).toLocaleString()}</span>
-              </p>
+              {analyticsData?.dailyEarnings ? (
+                <>
+                  <ResponsiveContainer width="100%" height={160}>
+                    <BarChart data={analyticsData.dailyEarnings}>
+                      <XAxis dataKey="day" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+                      <RechartTooltip
+                        contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "11px" }}
+                        formatter={(v: number) => [`₦${v.toLocaleString()}`, "Earnings"]}
+                      />
+                      <Bar dataKey="amount" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                  <p className="text-xs text-right text-muted-foreground pt-2">
+                    Week total: <span className="font-semibold text-foreground">₦{analyticsData.weeklyTotal.toLocaleString()}</span>
+                  </p>
+                </>
+              ) : (
+                <div className="h-[160px] rounded-lg bg-muted/30 animate-pulse" />
+              )}
             </CardContent>
           </Card>
 

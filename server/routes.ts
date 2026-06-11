@@ -36,35 +36,22 @@ const upload = multer({
   },
 });
 
-// ─── SIMPLE IN-MEMORY RATE LIMITER ─────────────────────────────────────────
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+// ─── DB-BACKED RATE LIMITER ─────────────────────────────────────────────────
 
 function rateLimit(maxRequests: number, windowMs: number) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    const key = req.ip ?? "unknown";
-    const now = Date.now();
-    const entry = rateLimitMap.get(key);
-
-    if (!entry || now > entry.resetAt) {
-      rateLimitMap.set(key, { count: 1, resetAt: now + windowMs });
-      return next();
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const key = `${req.ip ?? "unknown"}:${req.path}`;
+      const allowed = await storage.checkRateLimit(key, maxRequests, windowMs);
+      if (!allowed) {
+        return res.status(429).json({ error: "Too many requests. Please wait before trying again." });
+      }
+      next();
+    } catch {
+      next();
     }
-
-    entry.count += 1;
-    if (entry.count > maxRequests) {
-      return res.status(429).json({ error: "Too many requests. Please wait before trying again." });
-    }
-    next();
   };
 }
-
-// Clean up stale entries every 10 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of rateLimitMap.entries()) {
-    if (now > entry.resetAt) rateLimitMap.delete(key);
-  }
-}, 10 * 60 * 1000);
 
 // ─── AUTH MIDDLEWARE ────────────────────────────────────────────────────────
 
@@ -77,7 +64,6 @@ declare global {
 }
 
 function jwtAuth(req: Request, _res: Response, next: NextFunction) {
-  // Accept JWT from cookie OR Authorization: Bearer header (whichever is present)
   const bearerToken = req.headers.authorization?.startsWith("Bearer ")
     ? req.headers.authorization.slice(7)
     : undefined;
@@ -108,16 +94,15 @@ function requireDriver(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
-const authRateLimit = rateLimit(10, 15 * 60 * 1000); // 10 attempts per 15 minutes
+const authRateLimit = rateLimit(10, 15 * 60 * 1000);
 const MAX_PASSWORD_LENGTH = 72;
 
 export function registerRoutes(app: Express) {
 
-  // Parse JWT from cookie on every request
   app.use(jwtAuth);
 
   if (process.env.NODE_ENV === "production" && !process.env.SESSION_SECRET) {
-    console.error("[SECURITY] SESSION_SECRET env var is not set — set it in your deployment environment variables.");
+    console.error("[SECURITY] SESSION_SECRET env var is not set.");
   }
 
   // ─── SERVER-SENT EVENTS ────────────────────────────────────────────────────
@@ -135,7 +120,6 @@ export function registerRoutes(app: Express) {
     };
 
     eventBus.on("app:event", onEvent);
-
     const ping = setInterval(() => res.write(": ping\n\n"), 25000);
 
     req.on("close", () => {
@@ -310,6 +294,7 @@ export function registerRoutes(app: Express) {
 
   app.patch("/api/bins/:id/reset", requireAdmin, async (req, res) => {
     const bin = await storage.resetBin(req.params.id);
+    emitEvent({ type: "bin:update", data: { id: bin.id, fillLevel: bin.fillLevel } });
     res.json(bin);
   });
 
@@ -364,7 +349,6 @@ export function registerRoutes(app: Express) {
     const task = tasks.find(t => t.id === req.params.id);
     if (!task) return res.status(404).json({ error: "Task not found" });
 
-    // Drivers can only complete tasks assigned to them; admins can complete any
     if (req.jwtUser!.role === "driver" && task.driverId !== req.jwtUser!.userId) {
       return res.status(403).json({ error: "You can only complete your own tasks" });
     }
@@ -439,12 +423,14 @@ export function registerRoutes(app: Express) {
       wasteType: z.string().default("general"),
       address: z.string().optional(),
       notes: z.string().optional(),
+      scheduledDate: z.string().optional(),
+      timeSlot: z.enum(["morning", "afternoon"]).optional(),
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-    const { wasteType, address, notes } = parsed.data;
-    const pickup = await storage.createPickup(req.jwtUser!.userId, wasteType, address, notes);
+    const { wasteType, address, notes, scheduledDate, timeSlot } = parsed.data;
+    const pickup = await storage.createPickup(req.jwtUser!.userId, wasteType, address, notes, scheduledDate, timeSlot);
     await storage.addPoints(req.jwtUser!.userId, "Requested pickup", 10);
     emitEvent({ type: "pickup:new", data: { id: pickup.id, wasteType: pickup.wasteType, address: pickup.address ?? undefined } });
     res.json(pickup);
@@ -570,6 +556,27 @@ export function registerRoutes(app: Express) {
     res.json(sub);
   });
 
+  // ─── ANALYTICS ────────────────────────────────────────────────────────────
+
+  app.get("/api/analytics", requireAuth, async (req, res) => {
+    const { role, userId } = req.jwtUser!;
+    try {
+      if (role === "admin") {
+        const data = await storage.getAdminAnalytics();
+        res.json(data);
+      } else if (role === "driver") {
+        const data = await storage.getDriverAnalytics(userId);
+        res.json(data);
+      } else {
+        const data = await storage.getUserAnalytics(userId);
+        res.json(data);
+      }
+    } catch (err: any) {
+      console.error("[analytics]", err);
+      res.status(500).json({ error: "Failed to load analytics" });
+    }
+  });
+
   // ─── DRIVER KYC ───────────────────────────────────────────────────────────
 
   app.get("/api/driver/kyc", requireAuth, async (req, res) => {
@@ -647,6 +654,11 @@ export function registerRoutes(app: Express) {
       pendingKyc: allKyc.filter((k) => k.status === "pending").length,
       pickups: pickupStats,
     });
+  });
+
+  app.get("/api/admin/subscriptions", requireAdmin, async (_req, res) => {
+    const subs = await storage.getAllSubscriptionsWithUsers();
+    res.json(subs);
   });
 
   app.get("/api/admin/kyc", requireAdmin, async (_req, res) => {

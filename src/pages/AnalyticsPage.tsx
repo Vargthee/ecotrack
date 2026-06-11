@@ -1,52 +1,55 @@
 import { useAuth } from "@/contexts/AuthContext";
+import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { AnalyticsDashboard } from "@/components/AnalyticsDashboard";
 import { FeatureGate } from "@/components/FeatureGate";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { StatCard } from "@/components/StatCard";
 import {
   Banknote, Truck, Star, TrendingUp, CheckCircle, Clock,
-  Leaf, Recycle, Package, Award, BarChart3, Target
+  Leaf, Recycle, Package, Award, Target, Loader2
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, CartesianGrid, PieChart, Pie, Cell, Legend
 } from "recharts";
 
-const weeklyEarnings = [
-  { day: "Mon", amount: 4200, tasks: 5 },
-  { day: "Tue", amount: 5600, tasks: 7 },
-  { day: "Wed", amount: 3600, tasks: 4 },
-  { day: "Thu", amount: 6000, tasks: 8 },
-  { day: "Fri", amount: 4800, tasks: 6 },
-  { day: "Sat", amount: 2600, tasks: 3 },
-  { day: "Sun", amount: 0, tasks: 0 },
-];
+type DriverAnalytics = {
+  dailyEarnings: { day: string; amount: number; tasks: number }[];
+  tasksByWasteType: { name: string; count: number; fill: string }[];
+  weeklyTotal: number; weeklyTasks: number;
+  completedCount: number; totalCount: number; totalEarnings: number;
+};
 
-const monthlyEarnings = [
-  { month: "Jan", amount: 82000 },
-  { month: "Feb", amount: 97000 },
-  { month: "Mar", amount: 88500 },
-  { month: "Apr", amount: 112000 },
-];
-
-const wasteTypeBreakdown = [
-  { name: "General", count: 42, fill: "hsl(var(--primary))" },
-  { name: "Recycling", count: 18, fill: "hsl(var(--success))" },
-  { name: "Organic", count: 12, fill: "hsl(var(--warning))" },
-  { name: "E-Waste", count: 5, fill: "hsl(var(--destructive))" },
-];
-
-const userEcoData = [
-  { month: "Jan", points: 120, pickups: 3 },
-  { month: "Feb", points: 240, pickups: 6 },
-  { month: "Mar", points: 180, pickups: 5 },
-  { month: "Apr", points: 340, pickups: 8 },
-];
+type UserAnalytics = {
+  monthlyStats: { month: string; points: number; pickups: number }[];
+  totalPoints: number; totalPickups: number; recyclingPickups: number; co2Offset: number;
+};
 
 function DriverAnalytics() {
-  const totalWeekly = weeklyEarnings.reduce((s, d) => s + d.amount, 0);
-  const totalTasks = weeklyEarnings.reduce((s, d) => s + d.tasks, 0);
+  const { data, isLoading } = useQuery<DriverAnalytics>({
+    queryKey: ["/api/analytics"],
+    queryFn: () => apiRequest("GET", "/api/analytics"),
+  });
+
+  if (isLoading || !data) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold text-foreground">Earnings & Performance</h2>
+          <p className="text-sm text-muted-foreground">Your personal driver stats and earnings breakdown</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[1,2,3,4].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
+        </div>
+        <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+      </div>
+    );
+  }
+
+  const avgPerTask = data.weeklyTasks > 0 ? Math.round(data.weeklyTotal / data.weeklyTasks) : 0;
 
   return (
     <div className="space-y-6">
@@ -58,32 +61,30 @@ function DriverAnalytics() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="This Week's Earnings"
-          value={`₦${totalWeekly.toLocaleString()}`}
+          value={`₦${data.weeklyTotal.toLocaleString()}`}
           subtitle="7-day total"
           icon={Banknote}
-          trend={{ value: 12.3, label: "vs last week" }}
           variant="primary"
         />
         <StatCard
-          title="Tasks Completed"
-          value={String(totalTasks)}
-          subtitle="This week"
+          title="Tasks This Week"
+          value={String(data.weeklyTasks)}
+          subtitle="Completed"
           icon={CheckCircle}
-          trend={{ value: 8.1, label: "vs last week" }}
           variant="success"
         />
         <StatCard
           title="Average Per Task"
-          value={`₦${Math.round(totalWeekly / Math.max(totalTasks, 1)).toLocaleString()}`}
+          value={`₦${avgPerTask.toLocaleString()}`}
           subtitle="Earnings per pickup"
           icon={TrendingUp}
           variant="default"
         />
         <StatCard
-          title="Rating"
-          value="4.9"
-          subtitle="Based on 77 reviews"
-          icon={Star}
+          title="All-Time Tasks"
+          value={String(data.completedCount)}
+          subtitle={`of ${data.totalCount} assigned`}
+          icon={Truck}
           variant="default"
         />
       </div>
@@ -92,15 +93,15 @@ function DriverAnalytics() {
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              Weekly Earnings
+              Weekly Earnings (last 7 days)
             </CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={weeklyEarnings}>
+              <BarChart data={data.dailyEarnings}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="day" tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
-                <YAxis tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v) => `₦${(v / 1000).toFixed(0)}k`} />
+                <YAxis tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} tickFormatter={v => `₦${(v / 1000).toFixed(0)}k`} />
                 <Tooltip
                   contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }}
                   formatter={(v: number) => [`₦${v.toLocaleString()}`, "Earnings"]}
@@ -120,10 +121,8 @@ function DriverAnalytics() {
           <CardContent>
             <ResponsiveContainer width="100%" height={260}>
               <PieChart>
-                <Pie data={wasteTypeBreakdown} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={85} innerRadius={48} stroke="hsl(var(--card))" strokeWidth={2}>
-                  {wasteTypeBreakdown.map((entry, i) => (
-                    <Cell key={i} fill={entry.fill} />
-                  ))}
+                <Pie data={data.tasksByWasteType.filter(t => t.count > 0)} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={85} innerRadius={48} stroke="hsl(var(--card))" strokeWidth={2}>
+                  {data.tasksByWasteType.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
                 </Pie>
                 <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
                 <Legend wrapperStyle={{ fontSize: "11px" }} />
@@ -133,34 +132,12 @@ function DriverAnalytics() {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Monthly Earnings Trend
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={monthlyEarnings}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="month" tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
-              <YAxis tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v) => `₦${(v / 1000).toFixed(0)}k`} />
-              <Tooltip
-                contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }}
-                formatter={(v: number) => [`₦${v.toLocaleString()}`, "Earnings"]}
-              />
-              <Line type="monotone" dataKey="amount" stroke="hsl(var(--success))" strokeWidth={2.5} dot={{ r: 4, fill: "hsl(var(--success))" }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
       <div className="grid gap-4 sm:grid-cols-3">
         {[
-          { label: "Acceptance Rate", value: "94%", icon: Target, color: "text-success", sub: "of all offered jobs" },
-          { label: "On-Time Rate", value: "98%", icon: Clock, color: "text-primary", sub: "pickups completed on time" },
-          { label: "Total Pickups (All Time)", value: "347", icon: Truck, color: "text-warning", sub: "since joining" },
-        ].map((stat) => (
+          { label: "Total Earnings", value: `₦${data.totalEarnings.toLocaleString()}`, icon: Banknote, color: "text-success", sub: "all time" },
+          { label: "Completed Tasks", value: String(data.completedCount), icon: CheckCircle, color: "text-primary", sub: "verified collections" },
+          { label: "Completion Rate", value: data.totalCount > 0 ? `${Math.round((data.completedCount / data.totalCount) * 100)}%` : "—", icon: Target, color: "text-warning", sub: "of assigned tasks" },
+        ].map(stat => (
           <Card key={stat.label}>
             <CardContent className="p-5">
               <stat.icon className={`h-5 w-5 ${stat.color} mb-3`} />
@@ -176,6 +153,26 @@ function DriverAnalytics() {
 }
 
 function UserAnalytics() {
+  const { data, isLoading } = useQuery<UserAnalytics>({
+    queryKey: ["/api/analytics"],
+    queryFn: () => apiRequest("GET", "/api/analytics"),
+  });
+
+  if (isLoading || !data) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold text-foreground">My Eco Analytics</h2>
+          <p className="text-sm text-muted-foreground">Your personal sustainability impact over time</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[1,2,3,4].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
+        </div>
+        <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -184,51 +181,56 @@ function UserAnalytics() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Eco Points Earned" value="880" subtitle="All time" icon={Award} trend={{ value: 18.2, label: "vs last month" }} variant="primary" />
-        <StatCard title="Total Pickups" value="22" subtitle="Requests made" icon={Package} trend={{ value: 4.0, label: "vs last month" }} variant="success" />
-        <StatCard title="Recycling Pickups" value="9" subtitle="Out of 22 total" icon={Recycle} variant="default" />
-        <StatCard title="CO₂ Offset" value="14kg" subtitle="Estimated impact" icon={Leaf} variant="default" />
+        <StatCard title="Eco Points Earned" value={String(data.totalPoints)} subtitle="All time" icon={Award} variant="primary" />
+        <StatCard title="Total Pickups" value={String(data.totalPickups)} subtitle="Requests made" icon={Package} variant="success" />
+        <StatCard title="Recycling Pickups" value={String(data.recyclingPickups)} subtitle={`of ${data.totalPickups} total`} icon={Recycle} variant="default" />
+        <StatCard title="CO₂ Offset" value={`${data.co2Offset}kg`} subtitle="Estimated impact" icon={Leaf} variant="default" />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              Eco Points Over Time
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={userEcoData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="month" tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
-                <YAxis tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
-                <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
-                <Line type="monotone" dataKey="points" stroke="hsl(var(--primary))" strokeWidth={2.5} dot={{ r: 4, fill: "hsl(var(--primary))" }} name="Eco Points" />
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+      {data.monthlyStats.length > 0 ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Eco Points Over Time</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={data.monthlyStats}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                  <YAxis tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
+                  <Line type="monotone" dataKey="points" stroke="hsl(var(--primary))" strokeWidth={2.5} dot={{ r: 4, fill: "hsl(var(--primary))" }} name="Eco Points" />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
 
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Monthly Pickups</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={data.monthlyStats}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                  <YAxis tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
+                  <Bar dataKey="pickups" fill="hsl(var(--success))" radius={[4, 4, 0, 0]} name="Pickups" />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              Monthly Pickups
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={userEcoData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="month" tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
-                <YAxis tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
-                <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
-                <Bar dataKey="pickups" fill="hsl(var(--success))" radius={[4, 4, 0, 0]} name="Pickups" />
-              </BarChart>
-            </ResponsiveContainer>
+          <CardContent className="p-8 text-center text-muted-foreground">
+            <Package className="h-8 w-8 mx-auto mb-2 opacity-30" />
+            <p className="text-sm">No data yet. Request your first pickup to start tracking!</p>
           </CardContent>
         </Card>
-      </div>
+      )}
 
       <Card>
         <CardContent className="p-5">
@@ -237,12 +239,12 @@ function UserAnalytics() {
               <Leaf className="h-5 w-5 text-success" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-foreground">Your Impact This Month</p>
+              <p className="text-sm font-semibold text-foreground">Your Environmental Impact</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                You've diverted an estimated <span className="font-medium text-foreground">14kg of CO₂</span> through proper waste disposal and recycling — equivalent to planting 1 tree.
+                You've diverted an estimated <span className="font-medium text-foreground">{data.co2Offset}kg of CO₂</span> through proper waste disposal — that's real impact for Jos.
               </p>
             </div>
-            <Badge className="bg-success/15 text-success border-success/30 shrink-0 ml-auto">Green Hero</Badge>
+            {data.totalPoints > 200 && <Badge className="bg-success/15 text-success border-success/30 shrink-0 ml-auto">Green Hero</Badge>}
           </div>
         </CardContent>
       </Card>
@@ -253,13 +255,8 @@ function UserAnalytics() {
 const AnalyticsPage = () => {
   const { user } = useAuth();
 
-  if (user?.role === "admin") {
-    return <AnalyticsDashboard />;
-  }
-
-  if (user?.role === "driver") {
-    return <DriverAnalytics />;
-  }
+  if (user?.role === "admin") return <AnalyticsDashboard />;
+  if (user?.role === "driver") return <DriverAnalytics />;
 
   return (
     <FeatureGate requiredTier="pro" featureLabel="Personal Analytics">
