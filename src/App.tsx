@@ -7,8 +7,9 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { NotificationsProvider } from "@/contexts/NotificationsContext";
 import { AppLayout } from "@/components/AppLayout";
-import { FloatingChatbot } from "@/components/FloatingChatbot";
+import { useRealtimeEvents } from "@/hooks/useRealtimeEvents";
 
 const LandingPage    = lazy(() => import("./pages/LandingPage"));
 const MapPage        = lazy(() => import("./pages/MapPage"));
@@ -23,6 +24,7 @@ const AuthPage       = lazy(() => import("./pages/AuthPage"));
 const UserDashboard  = lazy(() => import("./pages/UserDashboard"));
 const EcoPointsPage  = lazy(() => import("./pages/EcoPointsPage"));
 const DriverKYCPage  = lazy(() => import("./pages/DriverKYCPage"));
+const FloatingChatbot = lazy(() => import("./components/FloatingChatbot").then(m => ({ default: m.FloatingChatbot })));
 const NotFound       = lazy(() => import("./pages/NotFound"));
 
 /* ── Skeleton fallbacks ── */
@@ -41,7 +43,6 @@ function BarsSkeleton() {
     </div>
   );
 }
-
 function MapSkeleton() {
   return (
     <div className="space-y-4 p-1 animate-fade-in">
@@ -53,7 +54,6 @@ function MapSkeleton() {
     </div>
   );
 }
-
 function CardsSkeleton() {
   return (
     <div className="space-y-4 p-1 animate-fade-in">
@@ -64,7 +64,6 @@ function CardsSkeleton() {
     </div>
   );
 }
-
 function ListSkeleton() {
   return (
     <div className="space-y-3 p-1 animate-fade-in">
@@ -73,13 +72,36 @@ function ListSkeleton() {
     </div>
   );
 }
-
 function SpinnerOnly() {
   return (
     <div className="flex items-center justify-center h-[50vh] animate-fade-in">
       <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-primary border-t-transparent" />
     </div>
   );
+}
+
+/* ── Role-based route guards ── */
+function UserOnlyRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (user?.role === "driver") return <Navigate to="/driver" replace />;
+  if (user?.role === "admin") return <Navigate to="/admin" replace />;
+  return <>{children}</>;
+}
+function DriverOnlyRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (user?.role === "user") return <Navigate to="/user-dashboard" replace />;
+  if (user?.role === "admin") return <Navigate to="/admin" replace />;
+  return <>{children}</>;
+}
+function AdminOnlyRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (user?.role !== "admin") return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
+function RealtimeSetup() {
+  useRealtimeEvents();
+  return null;
 }
 
 function ProtectedLayout() {
@@ -102,31 +124,36 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <AuthProvider>
-        <SubscriptionProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<Suspense fallback={<SpinnerOnly />}><LandingPage /></Suspense>} />
-              <Route path="/auth" element={<Suspense fallback={<SpinnerOnly />}><AuthGuard /></Suspense>} />
-              <Route path="/admin/login" element={<Suspense fallback={<SpinnerOnly />}><AdminLoginPage /></Suspense>} />
-              <Route element={<ProtectedLayout />}>
-                <Route path="/user-dashboard" element={<Suspense fallback={<BarsSkeleton />}><UserDashboard /></Suspense>} />
-                <Route path="/eco-points"     element={<Suspense fallback={<CardsSkeleton />}><EcoPointsPage /></Suspense>} />
-                <Route path="/map"            element={<Suspense fallback={<MapSkeleton />}><MapPage /></Suspense>} />
-                <Route path="/analytics"      element={<Suspense fallback={<BarsSkeleton />}><AnalyticsPage /></Suspense>} />
-                <Route path="/driver"         element={<Suspense fallback={<ListSkeleton />}><DriverPage /></Suspense>} />
-                <Route path="/driver/kyc"     element={<Suspense fallback={<CardsSkeleton />}><DriverKYCPage /></Suspense>} />
-                <Route path="/reports"        element={<Suspense fallback={<ListSkeleton />}><ReportsPage /></Suspense>} />
-                <Route path="/pricing"        element={<Suspense fallback={<CardsSkeleton />}><PricingPage /></Suspense>} />
-                <Route path="/billing"        element={<Suspense fallback={<CardsSkeleton />}><BillingPage /></Suspense>} />
-                <Route path="/admin"          element={<Suspense fallback={<BarsSkeleton />}><AdminPage /></Suspense>} />
-              </Route>
-              <Route path="*" element={<Suspense fallback={<SpinnerOnly />}><NotFound /></Suspense>} />
-            </Routes>
-            <FloatingChatbot />
-          </BrowserRouter>
-        </SubscriptionProvider>
+        <NotificationsProvider>
+          <SubscriptionProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <RealtimeSetup />
+              <Routes>
+                <Route path="/" element={<Suspense fallback={<SpinnerOnly />}><LandingPage /></Suspense>} />
+                <Route path="/auth" element={<Suspense fallback={<SpinnerOnly />}><AuthGuard /></Suspense>} />
+                <Route path="/admin/login" element={<Suspense fallback={<SpinnerOnly />}><AdminLoginPage /></Suspense>} />
+                <Route element={<ProtectedLayout />}>
+                  <Route path="/user-dashboard" element={<UserOnlyRoute><Suspense fallback={<BarsSkeleton />}><UserDashboard /></Suspense></UserOnlyRoute>} />
+                  <Route path="/eco-points"     element={<UserOnlyRoute><Suspense fallback={<CardsSkeleton />}><EcoPointsPage /></Suspense></UserOnlyRoute>} />
+                  <Route path="/map"            element={<Suspense fallback={<MapSkeleton />}><MapPage /></Suspense>} />
+                  <Route path="/analytics"      element={<Suspense fallback={<BarsSkeleton />}><AnalyticsPage /></Suspense>} />
+                  <Route path="/driver"         element={<DriverOnlyRoute><Suspense fallback={<ListSkeleton />}><DriverPage /></Suspense></DriverOnlyRoute>} />
+                  <Route path="/driver/kyc"     element={<DriverOnlyRoute><Suspense fallback={<CardsSkeleton />}><DriverKYCPage /></Suspense></DriverOnlyRoute>} />
+                  <Route path="/reports"        element={<Suspense fallback={<ListSkeleton />}><ReportsPage /></Suspense>} />
+                  <Route path="/pricing"        element={<UserOnlyRoute><Suspense fallback={<CardsSkeleton />}><PricingPage /></Suspense></UserOnlyRoute>} />
+                  <Route path="/billing"        element={<UserOnlyRoute><Suspense fallback={<CardsSkeleton />}><BillingPage /></Suspense></UserOnlyRoute>} />
+                  <Route path="/admin"          element={<AdminOnlyRoute><Suspense fallback={<BarsSkeleton />}><AdminPage /></Suspense></AdminOnlyRoute>} />
+                </Route>
+                <Route path="*" element={<Suspense fallback={<SpinnerOnly />}><NotFound /></Suspense>} />
+              </Routes>
+              <Suspense fallback={null}>
+                <FloatingChatbot />
+              </Suspense>
+            </BrowserRouter>
+          </SubscriptionProvider>
+        </NotificationsProvider>
       </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>

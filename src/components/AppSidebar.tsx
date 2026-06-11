@@ -3,6 +3,7 @@ import {
   Shield, Award, FileCheck, LogOut, LayoutDashboard, FileText,
   Navigation, Wallet, Users
 } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { NavLink } from "@/components/NavLink";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
@@ -42,7 +43,7 @@ const userNavGroups = [
   {
     label: "Account",
     items: [
-      { title: "Pricing", url: "/pricing", icon: Sparkles, prefetchKey: null },
+      { title: "Pricing", url: "/pricing", icon: Sparkles,   prefetchKey: null },
       { title: "Billing", url: "/billing", icon: CreditCard, prefetchKey: null },
     ],
   },
@@ -52,22 +53,15 @@ const driverNavGroups = [
   {
     label: "My Work",
     items: [
-      { title: "My Tasks",   url: "/driver", icon: Truck,      prefetchKey: "/api/tasks" },
-      { title: "Route Map",  url: "/map",    icon: Navigation, prefetchKey: "/api/bins" },
+      { title: "My Tasks",  url: "/driver", icon: Truck,      prefetchKey: "/api/tasks" },
+      { title: "Route Map", url: "/map",    icon: Navigation, prefetchKey: "/api/bins" },
     ],
   },
   {
     label: "Driver",
     items: [
-      { title: "Earnings",        url: "/analytics",  icon: Wallet,    prefetchKey: null },
-      { title: "KYC Verification", url: "/driver/kyc", icon: FileCheck, prefetchKey: null },
-    ],
-  },
-  {
-    label: "Account",
-    items: [
-      { title: "Pricing", url: "/pricing", icon: Sparkles,  prefetchKey: null },
-      { title: "Billing", url: "/billing", icon: CreditCard, prefetchKey: null },
+      { title: "Earnings & Stats",  url: "/analytics",  icon: Wallet,    prefetchKey: null },
+      { title: "KYC Verification",  url: "/driver/kyc", icon: FileCheck, prefetchKey: null },
     ],
   },
 ];
@@ -76,9 +70,9 @@ const adminNavGroups = [
   {
     label: "System",
     items: [
-      { title: "Admin Dashboard", url: "/admin",     icon: Shield,   prefetchKey: "/api/admin/stats" },
-      { title: "Bin Map",         url: "/map",       icon: Map,      prefetchKey: "/api/bins" },
-      { title: "Analytics",       url: "/analytics", icon: BarChart3, prefetchKey: null },
+      { title: "Admin Dashboard",   url: "/admin",     icon: Shield,    prefetchKey: "/api/admin/stats" },
+      { title: "Bin Map",           url: "/map",       icon: Map,       prefetchKey: "/api/bins" },
+      { title: "System Analytics",  url: "/analytics", icon: BarChart3, prefetchKey: null },
     ],
   },
   {
@@ -86,13 +80,6 @@ const adminNavGroups = [
     items: [
       { title: "Reports", url: "/reports", icon: AlertTriangle, prefetchKey: "/api/reports" },
       { title: "Users",   url: "/admin",   icon: Users,         prefetchKey: null },
-    ],
-  },
-  {
-    label: "Platform",
-    items: [
-      { title: "Pricing", url: "/pricing", icon: Sparkles,  prefetchKey: null },
-      { title: "Billing", url: "/billing", icon: CreditCard, prefetchKey: null },
     ],
   },
 ];
@@ -152,8 +139,8 @@ export function AppSidebar() {
                         onMouseEnter={() => item.prefetchKey && prefetch(item.prefetchKey)}
                         onFocus={() => item.prefetchKey && prefetch(item.prefetchKey)}
                       >
-                        <item.icon className="mr-2 h-4 w-4 shrink-0 transition-transform group-hover:scale-110" />
-                        {!collapsed && <span className="transition-opacity">{item.title}</span>}
+                        <item.icon className="mr-2 h-4 w-4 shrink-0" />
+                        {!collapsed && <span>{item.title}</span>}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -198,7 +185,7 @@ export function AppSidebar() {
           </Button>
         )}
 
-        {!collapsed && (
+        {!collapsed && user?.role === "user" && (
           <div className="rounded-lg bg-sidebar-accent/50 p-3">
             <p className="text-xs text-sidebar-foreground/70">Current Plan</p>
             <div className="mt-1 flex items-center gap-2">
@@ -207,6 +194,24 @@ export function AppSidebar() {
             </div>
           </div>
         )}
+        {!collapsed && user?.role === "admin" && (
+          <div className="rounded-lg bg-destructive/10 p-3">
+            <p className="text-xs text-sidebar-foreground/70">Access Level</p>
+            <div className="mt-1">
+              <Badge className="bg-destructive/20 text-destructive text-[10px] border-0">Full Access</Badge>
+            </div>
+          </div>
+        )}
+        {!collapsed && user?.role === "driver" && (
+          <div className="rounded-lg bg-warning/10 p-3">
+            <p className="text-xs text-sidebar-foreground/70">Driver Status</p>
+            <div className="mt-1">
+              <Badge className="bg-warning/20 text-warning text-[10px] border-0">Active Driver</Badge>
+            </div>
+          </div>
+        )}
+
+        {!collapsed && <ThemeToggle />}
       </SidebarFooter>
     </Sidebar>
   );

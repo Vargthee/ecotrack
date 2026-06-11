@@ -1,34 +1,183 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { storage } from "./storage";
 import { z } from "zod";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import {
+  isCloudStorageConfigured,
+  uploadToCloud,
+  generateFilename,
+} from "./cloudStorage";
+import { eventBus, emitEvent } from "./eventBus";
+import { signToken, verifyToken, COOKIE_NAME, MAX_AGE_MS } from "./auth";
 
-declare module "express-session" {
-  interface SessionData {
-    userId: number;
-    role: string;
+const uploadsDir = process.env.VERCEL
+  ? "/tmp/uploads"
+  : path.resolve(process.cwd(), "uploads");
+
+if (!isCloudStorageConfigured() && !fs.existsSync(uploadsDir)) {
+  try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch (_) {}
+}
+
+const upload = multer({
+  storage: isCloudStorageConfigured()
+    ? multer.memoryStorage()
+    : multer.diskStorage({
+        destination: (_req, _file, cb) => cb(null, uploadsDir),
+        filename: (_req, file, cb) =>
+          cb(null, generateFilename(file.originalname)),
+      }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error("Only JPG, PNG, WebP and PDF files are allowed"));
+  },
+});
+
+// ─── SIMPLE IN-MEMORY RATE LIMITER ─────────────────────────────────────────
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function rateLimit(maxRequests: number, windowMs: number) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const key = req.ip ?? "unknown";
+    const now = Date.now();
+    const entry = rateLimitMap.get(key);
+
+    if (!entry || now > entry.resetAt) {
+      rateLimitMap.set(key, { count: 1, resetAt: now + windowMs });
+      return next();
+    }
+
+    entry.count += 1;
+    if (entry.count > maxRequests) {
+      return res.status(429).json({ error: "Too many requests. Please wait before trying again." });
+    }
+    next();
+  };
+}
+
+// Clean up stale entries every 10 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimitMap.entries()) {
+    if (now > entry.resetAt) rateLimitMap.delete(key);
+  }
+}, 10 * 60 * 1000);
+
+// ─── AUTH MIDDLEWARE ────────────────────────────────────────────────────────
+
+declare global {
+  namespace Express {
+    interface Request {
+      jwtUser?: { userId: number; role: string };
+    }
   }
 }
 
+function jwtAuth(req: Request, _res: Response, next: NextFunction) {
+  // Accept JWT from cookie OR Authorization: Bearer header (whichever is present)
+  const bearerToken = req.headers.authorization?.startsWith("Bearer ")
+    ? req.headers.authorization.slice(7)
+    : undefined;
+  const token = req.cookies?.[COOKIE_NAME] || bearerToken;
+  if (token) {
+    const payload = verifyToken(token);
+    if (payload) req.jwtUser = payload;
+  }
+  next();
+}
+
 function requireAuth(req: Request, res: Response, next: NextFunction) {
-  if (!req.session?.userId) return res.status(401).json({ error: "Not authenticated" });
+  if (!req.jwtUser) return res.status(401).json({ error: "Not authenticated" });
   next();
 }
 
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  if (!req.session?.userId) return res.status(401).json({ error: "Not authenticated" });
-  if (req.session.role !== "admin") return res.status(403).json({ error: "Admin only" });
+  if (!req.jwtUser) return res.status(401).json({ error: "Not authenticated" });
+  if (req.jwtUser.role !== "admin") return res.status(403).json({ error: "Admin only" });
   next();
 }
 
+function requireDriver(req: Request, res: Response, next: NextFunction) {
+  if (!req.jwtUser) return res.status(401).json({ error: "Not authenticated" });
+  if (req.jwtUser.role !== "driver" && req.jwtUser.role !== "admin") {
+    return res.status(403).json({ error: "Drivers only" });
+  }
+  next();
+}
+
+const authRateLimit = rateLimit(10, 15 * 60 * 1000); // 10 attempts per 15 minutes
+const MAX_PASSWORD_LENGTH = 72;
+
 export function registerRoutes(app: Express) {
+
+  // Parse JWT from cookie on every request
+  app.use(jwtAuth);
+
+  if (process.env.NODE_ENV === "production" && !process.env.SESSION_SECRET) {
+    console.error("[SECURITY] SESSION_SECRET env var is not set — set it in your deployment environment variables.");
+  }
+
+  // ─── SERVER-SENT EVENTS ────────────────────────────────────────────────────
+
+  app.get("/api/events", requireAuth, (req, res) => {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+
+    res.write(`data: ${JSON.stringify({ type: "connected" })}\n\n`);
+
+    const onEvent = (event: any) => {
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    };
+
+    eventBus.on("app:event", onEvent);
+
+    const ping = setInterval(() => res.write(": ping\n\n"), 25000);
+
+    req.on("close", () => {
+      clearInterval(ping);
+      eventBus.off("app:event", onEvent);
+    });
+  });
+
+  // ─── FILE UPLOAD ───────────────────────────────────────────────────────────
+
+  app.post("/api/upload", requireAuth, (req, res) => {
+    upload.single("file")(req, res, async (err) => {
+      if (err instanceof multer.MulterError) {
+        if (err.code === "LIMIT_FILE_SIZE") return res.status(400).json({ error: "File too large. Maximum size is 5MB." });
+        return res.status(400).json({ error: err.message });
+      }
+      if (err) return res.status(400).json({ error: err.message });
+      if (!req.file) return res.status(400).json({ error: "No file provided" });
+
+      if (isCloudStorageConfigured()) {
+        try {
+          const filename = generateFilename(req.file.originalname);
+          const url = await uploadToCloud(req.file.buffer, filename, req.file.mimetype);
+          return res.json({ url, filename, originalName: req.file.originalname, size: req.file.size });
+        } catch (uploadErr: any) {
+          console.error("[upload] R2 error:", uploadErr);
+          return res.status(500).json({ error: "Failed to upload file to cloud storage." });
+        }
+      }
+
+      const url = `/uploads/${req.file.filename}`;
+      res.json({ url, filename: req.file.filename, originalName: req.file.originalname, size: req.file.size });
+    });
+  });
 
   // ─── AUTH ─────────────────────────────────────────────────────────────────
 
-  app.post("/api/auth/register", async (req, res) => {
+  app.post("/api/auth/register", authRateLimit, async (req, res) => {
     const schema = z.object({
       name: z.string().min(2),
       email: z.string().email(),
-      password: z.string().min(6),
+      password: z.string().min(6).max(MAX_PASSWORD_LENGTH),
       role: z.enum(["user", "driver"]).default("user"),
     });
     const parsed = schema.safeParse(req.body);
@@ -40,43 +189,96 @@ export function registerRoutes(app: Express) {
 
     const user = await storage.createUser(name, email, password, role);
 
-    // Provision default subscription
     const nextBilling = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     await storage.upsertSubscription(user.id, { planType: "basic", status: "active", billingCycle: "monthly", nextBillingDate: nextBilling, startedAt: new Date().toISOString().split("T")[0] });
 
-    // Give 50 welcome points for users
     if (role === "user") await storage.addPoints(user.id, "Welcome bonus", 50);
 
-    req.session.userId = user.id;
-    req.session.role = user.role;
-    res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
+    const token = signToken({ userId: user.id, role: user.role });
+    const isProd = process.env.NODE_ENV === "production";
+    res.cookie(COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
+      maxAge: MAX_AGE_MS,
+    });
+    res.json({ id: user.id, name: user.name, email: user.email, role: user.role, token });
   });
 
-  app.post("/api/auth/login", async (req, res) => {
-    const schema = z.object({ email: z.string().email(), password: z.string() });
+  app.post("/api/auth/login", authRateLimit, async (req, res) => {
+    const schema = z.object({
+      email: z.string().email(),
+      password: z.string().max(MAX_PASSWORD_LENGTH),
+    });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Invalid input" });
 
     const user = await storage.getUserByEmail(parsed.data.email);
     if (!user) return res.status(401).json({ error: "Invalid credentials" });
 
+    if (user.status === "suspended") return res.status(403).json({ error: "Your account has been suspended. Please contact support." });
+    if (user.status === "banned") return res.status(403).json({ error: "Your account has been permanently banned." });
+
     const ok = await storage.verifyPassword(parsed.data.password, user.passwordHash);
     if (!ok) return res.status(401).json({ error: "Invalid credentials" });
 
-    req.session.userId = user.id;
-    req.session.role = user.role;
-    res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
+    const token = signToken({ userId: user.id, role: user.role });
+    const isProd = process.env.NODE_ENV === "production";
+    res.cookie(COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
+      maxAge: MAX_AGE_MS,
+    });
+    res.json({ id: user.id, name: user.name, email: user.email, role: user.role, token });
   });
 
-  app.post("/api/auth/logout", (req, res) => {
-    req.session.destroy(() => res.json({ ok: true }));
+  app.post("/api/auth/logout", (_req, res) => {
+    const isProd = process.env.NODE_ENV === "production";
+    res.clearCookie(COOKIE_NAME, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
+    });
+    res.json({ ok: true });
   });
 
   app.get("/api/auth/me", async (req, res) => {
-    if (!req.session?.userId) return res.status(401).json({ error: "Not authenticated" });
-    const user = await storage.getUserById(req.session.userId);
+    if (!req.jwtUser) return res.status(401).json({ error: "Not authenticated" });
+    const user = await storage.getUserById(req.jwtUser.userId);
     if (!user) return res.status(401).json({ error: "User not found" });
+    res.json({ id: user.id, name: user.name, email: user.email, role: user.role, phone: user.phone, status: user.status });
+  });
+
+  app.patch("/api/user/profile", requireAuth, async (req, res) => {
+    const schema = z.object({
+      name: z.string().min(2).max(100).optional(),
+      phone: z.string().max(20).optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    if (!parsed.data.name && !parsed.data.phone) return res.status(400).json({ error: "No fields to update" });
+
+    const user = await storage.updateUserProfile(req.jwtUser!.userId, parsed.data);
     res.json({ id: user.id, name: user.name, email: user.email, role: user.role, phone: user.phone });
+  });
+
+  app.post("/api/auth/change-password", requireAuth, authRateLimit, async (req, res) => {
+    const schema = z.object({
+      currentPassword: z.string(),
+      newPassword: z.string().min(6).max(MAX_PASSWORD_LENGTH),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+    const user = await storage.getUserById(req.jwtUser!.userId);
+    if (!user) return res.status(401).json({ error: "User not found" });
+
+    const ok = await storage.verifyPassword(parsed.data.currentPassword, user.passwordHash);
+    if (!ok) return res.status(401).json({ error: "Current password is incorrect" });
+
+    await storage.changePassword(req.jwtUser!.userId, parsed.data.newPassword);
+    res.json({ ok: true });
   });
 
   // ─── BINS ─────────────────────────────────────────────────────────────────
@@ -84,6 +286,26 @@ export function registerRoutes(app: Express) {
   app.get("/api/bins", requireAuth, async (_req, res) => {
     const bins = await storage.getAllBins();
     res.json(bins);
+  });
+
+  app.post("/api/bins", requireAdmin, async (req, res) => {
+    const schema = z.object({
+      id: z.string().min(1),
+      location: z.string().min(2),
+      lat: z.number(),
+      lng: z.number(),
+      fillLevel: z.number().int().min(0).max(100).optional(),
+      lastCollected: z.string(),
+      type: z.enum(["general", "recycling", "organic"]).default("general"),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+    const existing = await storage.getBinById(parsed.data.id);
+    if (existing) return res.status(409).json({ error: "A bin with that ID already exists" });
+
+    const bin = await storage.createBin(parsed.data);
+    res.status(201).json(bin);
   });
 
   app.patch("/api/bins/:id/reset", requireAdmin, async (req, res) => {
@@ -94,6 +316,7 @@ export function registerRoutes(app: Express) {
   app.patch("/api/bins/:id", requireAdmin, async (req, res) => {
     const { fillLevel } = req.body;
     const bin = await storage.updateBinFillLevel(req.params.id, fillLevel);
+    emitEvent({ type: "bin:update", data: { id: bin.id, fillLevel: bin.fillLevel } });
     res.json(bin);
   });
 
@@ -105,7 +328,7 @@ export function registerRoutes(app: Express) {
   // ─── DRIVER TASKS ─────────────────────────────────────────────────────────
 
   app.get("/api/tasks", requireAuth, async (req, res) => {
-    const user = await storage.getUserById(req.session.userId!);
+    const user = await storage.getUserById(req.jwtUser!.userId);
     if (!user) return res.status(401).json({ error: "User not found" });
     const tasks = user.role === "admin"
       ? await storage.getAllTasks()
@@ -113,11 +336,43 @@ export function registerRoutes(app: Express) {
     res.json(tasks);
   });
 
-  app.patch("/api/tasks/:id/complete", requireAuth, async (req, res) => {
-    const task = await storage.completeTask(req.params.id, req.session.userId!);
-    // Award eco points to driver
-    await storage.addPoints(req.session.userId!, "Completed pickup", task.earning > 700 ? 20 : 15);
-    res.json(task);
+  app.post("/api/tasks", requireAdmin, async (req, res) => {
+    const schema = z.object({
+      id: z.string().min(1),
+      binId: z.string().min(1),
+      driverId: z.number().int().positive().optional(),
+      location: z.string().min(2),
+      fillLevel: z.number().int().min(0).max(100),
+      priority: z.enum(["high", "medium", "low"]).default("medium"),
+      estimatedTime: z.string().min(1),
+      wasteType: z.enum(["general", "recycling", "organic", "ewaste"]).default("general"),
+      earning: z.number().int().positive(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+    const bin = await storage.getBinById(parsed.data.binId);
+    if (!bin) return res.status(404).json({ error: "Bin not found" });
+
+    const task = await storage.createTask(parsed.data);
+    emitEvent({ type: "task:new", data: { id: task.id, location: task.location, priority: task.priority, driverId: task.driverId } });
+    res.status(201).json(task);
+  });
+
+  app.patch("/api/tasks/:id/complete", requireDriver, async (req, res) => {
+    const tasks = await storage.getAllTasks();
+    const task = tasks.find(t => t.id === req.params.id);
+    if (!task) return res.status(404).json({ error: "Task not found" });
+
+    // Drivers can only complete tasks assigned to them; admins can complete any
+    if (req.jwtUser!.role === "driver" && task.driverId !== req.jwtUser!.userId) {
+      return res.status(403).json({ error: "You can only complete your own tasks" });
+    }
+
+    const updated = await storage.completeTask(req.params.id, req.jwtUser!.userId);
+    await storage.addPoints(req.jwtUser!.userId, "Completed pickup", task.earning > 700 ? 20 : 15);
+    emitEvent({ type: "task:complete", data: { id: updated.id, driverId: updated.driverId } });
+    res.json(updated);
   });
 
   app.patch("/api/tasks/:id/uncomplete", requireAuth, async (req, res) => {
@@ -125,10 +380,17 @@ export function registerRoutes(app: Express) {
     res.json(task);
   });
 
+  // ─── DRIVER EARNINGS ──────────────────────────────────────────────────────
+
+  app.get("/api/driver/earnings", requireDriver, async (req, res) => {
+    const earnings = await storage.getDriverEarnings(req.jwtUser!.userId);
+    res.json(earnings);
+  });
+
   // ─── CITIZEN REPORTS ──────────────────────────────────────────────────────
 
   app.get("/api/reports", requireAuth, async (req, res) => {
-    const user = await storage.getUserById(req.session.userId!);
+    const user = await storage.getUserById(req.jwtUser!.userId);
     if (!user) return res.status(401).json({ error: "User not found" });
     const reports = (user.role === "admin" || user.role === "driver")
       ? await storage.getAllReports()
@@ -147,30 +409,28 @@ export function registerRoutes(app: Express) {
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-    const report = await storage.createReport({ userId: req.session.userId!, ...parsed.data });
-    // Reward points for reporting
-    await storage.addPoints(req.session.userId!, "Submitted report", 15);
+    const report = await storage.createReport({ userId: req.jwtUser!.userId, ...parsed.data });
+    await storage.addPoints(req.jwtUser!.userId, "Submitted report", 15);
+    emitEvent({ type: "report:new", data: { id: report.id, reportType: report.type, description: report.description } });
     res.json(report);
   });
 
   app.patch("/api/reports/:id", requireAdmin, async (req, res) => {
     const { status } = req.body;
     const report = await storage.updateReportStatus(req.params.id, status);
+    emitEvent({ type: "report:status", data: { id: report.id, status: report.status } });
     res.json(report);
   });
 
   // ─── PICKUP REQUESTS ──────────────────────────────────────────────────────
 
   app.get("/api/pickups", requireAuth, async (req, res) => {
-    const user = await storage.getUserById(req.session.userId!);
+    const user = await storage.getUserById(req.jwtUser!.userId);
     if (!user) return res.status(401).json({ error: "Unauthorized" });
-    // Drivers and admins get all pickups; users get their own
     if (user.role === "driver" || user.role === "admin") {
-      const pickups = await storage.getAllPickups();
-      res.json(pickups);
+      res.json(await storage.getAllPickups());
     } else {
-      const pickups = await storage.getPickupsByUser(req.session.userId!);
-      res.json(pickups);
+      res.json(await storage.getPickupsByUser(req.jwtUser!.userId));
     }
   });
 
@@ -184,33 +444,75 @@ export function registerRoutes(app: Express) {
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
     const { wasteType, address, notes } = parsed.data;
-    const pickup = await storage.createPickup(req.session.userId!, wasteType, address, notes);
-    await storage.addPoints(req.session.userId!, "Requested pickup", 10);
+    const pickup = await storage.createPickup(req.jwtUser!.userId, wasteType, address, notes);
+    await storage.addPoints(req.jwtUser!.userId, "Requested pickup", 10);
+    emitEvent({ type: "pickup:new", data: { id: pickup.id, wasteType: pickup.wasteType, address: pickup.address ?? undefined } });
     res.json(pickup);
   });
 
-  app.patch("/api/pickups/:id/accept", requireAuth, async (req, res) => {
-    const user = await storage.getUserById(req.session.userId!);
+  app.patch("/api/pickups/:id/accept", requireDriver, async (req, res) => {
+    const user = await storage.getUserById(req.jwtUser!.userId);
     if (!user || user.role !== "driver") return res.status(403).json({ error: "Drivers only" });
     const pickup = await storage.updatePickupStatus(Number(req.params.id), "assigned", user.id);
+    emitEvent({ type: "pickup:status", data: { id: pickup.id, status: "assigned", userId: pickup.userId } });
     res.json(pickup);
   });
 
-  app.patch("/api/pickups/:id/start", requireAuth, async (req, res) => {
-    const pickup = await storage.updatePickupStatus(Number(req.params.id), "in_progress");
-    res.json(pickup);
-  });
+  app.patch("/api/pickups/:id/start", requireDriver, async (req, res) => {
+    const pickup = await storage.getPickupById(Number(req.params.id));
+    if (!pickup) return res.status(404).json({ error: "Pickup not found" });
 
-  app.patch("/api/pickups/:id/complete-pickup", requireAuth, async (req, res) => {
-    const pickup = await storage.updatePickupStatus(Number(req.params.id), "completed");
-    if (pickup.userId) {
-      await storage.addPoints(pickup.userId, "Pickup completed", 20);
+    if (req.jwtUser!.role === "driver" && pickup.driverId !== req.jwtUser!.userId) {
+      return res.status(403).json({ error: "You are not assigned to this pickup" });
     }
-    res.json(pickup);
+
+    const updated = await storage.updatePickupStatus(Number(req.params.id), "in_progress");
+    emitEvent({ type: "pickup:status", data: { id: updated.id, status: "in_progress", userId: updated.userId } });
+    res.json(updated);
+  });
+
+  app.patch("/api/pickups/:id/complete-pickup", requireDriver, async (req, res) => {
+    const pickup = await storage.getPickupById(Number(req.params.id));
+    if (!pickup) return res.status(404).json({ error: "Pickup not found" });
+
+    if (req.jwtUser!.role === "driver" && pickup.driverId !== req.jwtUser!.userId) {
+      return res.status(403).json({ error: "You are not assigned to this pickup" });
+    }
+
+    const updated = await storage.updatePickupStatus(Number(req.params.id), "completed");
+    if (updated.userId) {
+      await storage.addPoints(updated.userId, "Pickup completed", 20);
+    }
+    emitEvent({ type: "pickup:status", data: { id: updated.id, status: "completed", userId: updated.userId } });
+    res.json(updated);
   });
 
   app.patch("/api/pickups/:id/cancel", requireAuth, async (req, res) => {
-    const pickup = await storage.updatePickupStatus(Number(req.params.id), "cancelled");
+    const pickup = await storage.getPickupById(Number(req.params.id));
+    if (!pickup) return res.status(404).json({ error: "Pickup not found" });
+
+    const isOwner = pickup.userId === req.jwtUser!.userId;
+    const isAssignedDriver = pickup.driverId === req.jwtUser!.userId;
+    const isAdmin = req.jwtUser!.role === "admin";
+
+    if (!isOwner && !isAssignedDriver && !isAdmin) {
+      return res.status(403).json({ error: "You cannot cancel this pickup" });
+    }
+
+    const updated = await storage.updatePickupStatus(Number(req.params.id), "cancelled");
+    emitEvent({ type: "pickup:status", data: { id: updated.id, status: "cancelled", userId: updated.userId } });
+    res.json(updated);
+  });
+
+  app.patch("/api/pickups/:id/assign", requireAdmin, async (req, res) => {
+    const { driverId } = req.body;
+    if (!driverId) return res.status(400).json({ error: "driverId required" });
+    const pickup = await storage.updatePickupStatus(Number(req.params.id), "assigned", Number(driverId));
+    res.json(pickup);
+  });
+
+  app.patch("/api/pickups/:id/unassign", requireAdmin, async (req, res) => {
+    const pickup = await storage.updatePickupStatus(Number(req.params.id), "pending", undefined);
     res.json(pickup);
   });
 
@@ -218,10 +520,16 @@ export function registerRoutes(app: Express) {
 
   app.get("/api/eco-points", requireAuth, async (req, res) => {
     const [balance, log] = await Promise.all([
-      storage.getPointsByUser(req.session.userId!),
-      storage.getPointsLog(req.session.userId!),
+      storage.getPointsByUser(req.jwtUser!.userId),
+      storage.getPointsLog(req.jwtUser!.userId),
     ]);
     res.json({ balance, log });
+  });
+
+  app.get("/api/eco-points/leaderboard", requireAuth, async (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 10, 50);
+    const leaderboard = await storage.getLeaderboard(limit);
+    res.json(leaderboard);
   });
 
   app.post("/api/eco-points/redeem", requireAuth, async (req, res) => {
@@ -229,21 +537,21 @@ export function registerRoutes(app: Express) {
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Invalid input" });
 
-    const balance = await storage.getPointsByUser(req.session.userId!);
+    const balance = await storage.getPointsByUser(req.jwtUser!.userId);
     if (balance < parsed.data.cost) return res.status(400).json({ error: "Insufficient points" });
 
-    const entry = await storage.deductPoints(req.session.userId!, `Redeemed: ${parsed.data.rewardName}`, parsed.data.cost);
-    const newBalance = await storage.getPointsByUser(req.session.userId!);
+    const entry = await storage.deductPoints(req.jwtUser!.userId, `Redeemed: ${parsed.data.rewardName}`, parsed.data.cost);
+    const newBalance = await storage.getPointsByUser(req.jwtUser!.userId);
     res.json({ entry, newBalance });
   });
 
   // ─── SUBSCRIPTIONS ────────────────────────────────────────────────────────
 
   app.get("/api/subscription", requireAuth, async (req, res) => {
-    let sub = await storage.getSubscriptionByUser(req.session.userId!);
+    let sub = await storage.getSubscriptionByUser(req.jwtUser!.userId);
     if (!sub) {
       const nextBilling = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-      sub = await storage.upsertSubscription(req.session.userId!, {
+      sub = await storage.upsertSubscription(req.jwtUser!.userId, {
         planType: "basic", status: "active", billingCycle: "monthly",
         nextBillingDate: nextBilling, startedAt: new Date().toISOString().split("T")[0],
       });
@@ -258,15 +566,46 @@ export function registerRoutes(app: Express) {
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-    const sub = await storage.upsertSubscription(req.session.userId!, parsed.data as any);
+    const sub = await storage.upsertSubscription(req.jwtUser!.userId, parsed.data as any);
     res.json(sub);
+  });
+
+  // ─── DRIVER KYC ───────────────────────────────────────────────────────────
+
+  app.get("/api/driver/kyc", requireAuth, async (req, res) => {
+    const user = await storage.getUserById(req.jwtUser!.userId);
+    if (!user || user.role !== "driver") return res.status(403).json({ error: "Drivers only" });
+    const kyc = await storage.getKycByDriver(req.jwtUser!.userId);
+    res.json(kyc ?? null);
+  });
+
+  app.post("/api/driver/kyc", requireAuth, async (req, res) => {
+    const user = await storage.getUserById(req.jwtUser!.userId);
+    if (!user || user.role !== "driver") return res.status(403).json({ error: "Drivers only" });
+    const schema = z.object({
+      govtIdType: z.string().optional(),
+      govtIdUrl: z.string().optional(),
+      licenseUrl: z.string().optional(),
+      vehicleMake: z.string().optional(),
+      vehicleModel: z.string().optional(),
+      vehicleYear: z.string().optional(),
+      vehiclePlate: z.string().optional(),
+      profilePhotoUrl: z.string().optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    const kyc = await storage.upsertKyc(req.jwtUser!.userId, { ...parsed.data, status: "pending" });
+    res.json(kyc);
   });
 
   // ─── ADMIN ────────────────────────────────────────────────────────────────
 
   app.get("/api/admin/users", requireAdmin, async (_req, res) => {
     const allUsers = await storage.getAllUsers();
-    res.json(allUsers.map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, createdAt: u.createdAt })));
+    res.json(allUsers.map((u) => ({
+      id: u.id, name: u.name, email: u.email, role: u.role,
+      status: u.status, createdAt: u.createdAt,
+    })));
   });
 
   app.patch("/api/admin/users/:id/role", requireAdmin, async (req, res) => {
@@ -275,12 +614,27 @@ export function registerRoutes(app: Express) {
     res.json({ id: user.id, name: user.name, role: user.role });
   });
 
+  app.patch("/api/admin/users/:id/status", requireAdmin, async (req, res) => {
+    const schema = z.object({ status: z.enum(["active", "suspended", "banned"]) });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+    const targetUser = await storage.getUserById(Number(req.params.id));
+    if (!targetUser) return res.status(404).json({ error: "User not found" });
+    if (targetUser.role === "admin") return res.status(403).json({ error: "Cannot change status of admin accounts" });
+
+    const user = await storage.updateUserStatus(Number(req.params.id), parsed.data.status);
+    res.json({ id: user.id, name: user.name, status: user.status });
+  });
+
   app.get("/api/admin/stats", requireAdmin, async (_req, res) => {
-    const [allUsers, allBins, allReports, allTasks] = await Promise.all([
+    const [allUsers, allBins, allReports, allTasks, allKyc, pickupStats] = await Promise.all([
       storage.getAllUsers(),
       storage.getAllBins(),
       storage.getAllReports(),
       storage.getAllTasks(),
+      storage.getAllKyc(),
+      storage.getPickupStats(),
     ]);
     res.json({
       totalUsers: allUsers.filter((u) => u.role === "user").length,
@@ -290,6 +644,29 @@ export function registerRoutes(app: Express) {
       pendingReports: allReports.filter((r) => r.status === "pending").length,
       totalTasks: allTasks.length,
       completedTasks: allTasks.filter((t) => t.completed).length,
+      pendingKyc: allKyc.filter((k) => k.status === "pending").length,
+      pickups: pickupStats,
     });
+  });
+
+  app.get("/api/admin/kyc", requireAdmin, async (_req, res) => {
+    const kycs = await storage.getAllKyc();
+    res.json(kycs);
+  });
+
+  app.patch("/api/admin/kyc/:driverId", requireAdmin, async (req, res) => {
+    const schema = z.object({
+      status: z.enum(["approved", "rejected"]),
+      rejectionReason: z.string().optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    const kyc = await storage.updateKycStatus(
+      Number(req.params.driverId),
+      parsed.data.status,
+      parsed.data.rejectionReason,
+    );
+    emitEvent({ type: "kyc:status", data: { driverId: kyc.driverId, status: kyc.status, rejectionReason: kyc.rejectionReason ?? undefined } });
+    res.json(kyc);
   });
 }

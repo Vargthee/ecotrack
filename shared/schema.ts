@@ -3,6 +3,8 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 export const userRoleEnum = pgEnum("user_role", ["user", "driver", "admin"]);
+export const userStatusEnum = pgEnum("user_status", ["active", "suspended", "banned"]);
+export const kycStatusEnum = pgEnum("kyc_status", ["pending", "approved", "rejected"]);
 export const binTypeEnum = pgEnum("bin_type", ["general", "recycling", "organic"]);
 export const taskPriorityEnum = pgEnum("task_priority", ["high", "medium", "low"]);
 export const wasteTypeEnum = pgEnum("waste_type", ["general", "recycling", "organic", "ewaste"]);
@@ -19,6 +21,7 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   role: userRoleEnum("role").notNull().default("user"),
+  status: userStatusEnum("status").notNull().default("active"),
   phone: text("phone"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -78,6 +81,24 @@ export const ecoPointsLog = pgTable("eco_points_log", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const driverKyc = pgTable("driver_kyc", {
+  id: serial("id").primaryKey(),
+  driverId: integer("driver_id").notNull().references(() => users.id).unique(),
+  status: kycStatusEnum("status").notNull().default("pending"),
+  govtIdType: text("govt_id_type"),
+  govtIdUrl: text("govt_id_url"),
+  licenseUrl: text("license_url"),
+  vehicleMake: text("vehicle_make"),
+  vehicleModel: text("vehicle_model"),
+  vehicleYear: text("vehicle_year"),
+  vehiclePlate: text("vehicle_plate"),
+  profilePhotoUrl: text("profile_photo_url"),
+  rejectionReason: text("rejection_reason"),
+  submittedAt: timestamp("submitted_at").defaultNow(),
+  reviewedAt: timestamp("reviewed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const subscriptions = pgTable("subscriptions", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => users.id).unique(),
@@ -96,6 +117,7 @@ export const insertReportSchema = createInsertSchema(citizenReports).omit({ crea
 export const insertPickupSchema = createInsertSchema(pickupRequests).omit({ id: true, createdAt: true });
 export const insertEcoPointSchema = createInsertSchema(ecoPointsLog).omit({ id: true, createdAt: true });
 export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({ id: true, createdAt: true });
+export const insertKycSchema = createInsertSchema(driverKyc).omit({ id: true, createdAt: true });
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -105,3 +127,4 @@ export type CitizenReport = typeof citizenReports.$inferSelect;
 export type PickupRequest = typeof pickupRequests.$inferSelect;
 export type EcoPointsEntry = typeof ecoPointsLog.$inferSelect;
 export type Subscription = typeof subscriptions.$inferSelect;
+export type DriverKyc = typeof driverKyc.$inferSelect;

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import { queryClient, getStoredToken, setStoredToken, clearStoredToken } from "@/lib/queryClient";
 
 export type UserRole = "user" | "driver" | "admin";
 
@@ -16,78 +17,112 @@ interface AuthContextValue {
   user: AuthUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string, role: UserRole) => Promise<boolean>;
-  register: (name: string, email: string, password: string, role: UserRole) => Promise<boolean>;
+  login: (email: string, password: string, role: UserRole) => Promise<string | null>;
+  register: (name: string, email: string, password: string, role: UserRole) => Promise<string | null>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-async function apiPost(path: string, body: unknown) {
-  const res = await fetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(body),
-  });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error || "Request failed");
-  return json;
+function mapApiUser(u: any): AuthUser {
+  return {
+    id: String(u.id),
+    name: u.name,
+    email: u.email,
+    role: u.role as UserRole,
+    phone: u.phone ?? undefined,
+  };
 }
 
-function mapApiUser(data: { id: number; name: string; email: string; role: UserRole; phone?: string }): AuthUser {
-  return {
-    id: String(data.id),
-    name: data.name,
-    email: data.email,
-    role: data.role,
-    phone: data.phone,
-    joinedAt: new Date().toISOString().split("T")[0],
-  };
+async function extractError(res: Response): Promise<string> {
+  try {
+    const text = await res.text();
+    // If the response is HTML (e.g. a gateway error page), report the status
+    if (text.trimStart().startsWith("<")) {
+      return `Server error (${res.status}) — please try again or contact support`;
+    }
+    const data = JSON.parse(text);
+    return data?.error || data?.message || `Request failed with status ${res.status}`;
+  } catch {
+    return `Server error (${res.status}) — please try again`;
+  }
+}
+
+function authHeaders(extra?: Record<string, string>): Record<string, string> {
+  const headers: Record<string, string> = { ...extra };
+  const token = getStoredToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  return headers;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Restore session from cookie on mount
   useEffect(() => {
-    fetch("/api/auth/me", { credentials: "include" })
+    fetch("/api/auth/me", {
+      credentials: "include",
+      headers: authHeaders(),
+    })
       .then((r) => (r.ok ? r.json() : null))
-      .then((data) => { if (data) setUser(mapApiUser(data)); })
+      .then((data) => {
+        if (data) setUser(mapApiUser(data));
+      })
       .catch(() => {})
       .finally(() => setIsLoading(false));
   }, []);
 
-  const login = useCallback(async (email: string, password: string, role: UserRole): Promise<boolean> => {
+  const login = useCallback(async (email: string, password: string, _role: UserRole): Promise<string | null> => {
     try {
-      const data = await apiPost("/api/auth/login", { email, password });
-      if (data.role !== role) {
-        // Wrong role — logout from server and reject
-        await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-        return false;
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email, password }),
+      });
+      if (!res.ok) {
+        const msg = await extractError(res);
+        return res.status === 401 ? "Incorrect email or password" : msg;
       }
+      const data = await res.json();
+      if (data.token) setStoredToken(data.token);
+      queryClient.clear();
       setUser(mapApiUser(data));
-      return true;
+      return null;
     } catch {
-      return false;
+      return "Network error — please try again";
     }
   }, []);
 
-  const register = useCallback(async (name: string, email: string, password: string, role: UserRole): Promise<boolean> => {
-    if (role === "admin") return false;
+  const register = useCallback(async (name: string, email: string, password: string, role: UserRole): Promise<string | null> => {
+    if (role === "admin") return "Admin accounts cannot be created here";
     try {
-      const data = await apiPost("/api/auth/register", { name, email, password, role });
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ name, email, password, role }),
+      });
+      if (!res.ok) {
+        const msg = await extractError(res);
+        return res.status === 409 ? "An account with this email already exists" : msg;
+      }
+      const data = await res.json();
+      if (data.token) setStoredToken(data.token);
+      queryClient.clear();
       setUser(mapApiUser(data));
-      return true;
+      return null;
     } catch {
-      return false;
+      return "Network error — please try again";
     }
   }, []);
 
-  const logout = useCallback(async () => {
-    await fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
+  const logout = useCallback(() => {
+    fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
+    clearStoredToken();
+    sessionStorage.removeItem("ecotrack_user");
     sessionStorage.removeItem("ecotrack_admin_auth");
+    queryClient.clear();
     setUser(null);
   }, []);
 

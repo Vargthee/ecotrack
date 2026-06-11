@@ -5,7 +5,6 @@ import { BinStatusBadge } from "./BinStatusBadge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { MapPin, Clock, Route } from "lucide-react";
 import { DynamicCollectionAlerts } from "./DynamicCollectionAlerts";
-import "leaflet/dist/leaflet.css";
 
 type Bin = {
   id: string;

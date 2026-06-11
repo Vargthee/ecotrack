@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSubscription } from "@/contexts/SubscriptionContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { wasteBins, WasteBin } from "@/data/mockData";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,8 +19,10 @@ const DYNAMIC_THRESHOLD = 85;
 
 export function DynamicCollectionAlerts() {
   const { features, subscription } = useSubscription();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const hasDynamic = features.dynamicCollection;
+  const canDispatch = user?.role === "admin";
 
   const eligibleBins = wasteBins.filter((b) => b.fillLevel >= DYNAMIC_THRESHOLD);
 
@@ -118,15 +121,21 @@ export function DynamicCollectionAlerts() {
               </div>
             </div>
             {req.status === "pending" ? (
-              <Button
-                size="sm"
-                variant="default"
-                className="text-xs h-7"
-                onClick={() => handleDispatch(req.bin.id)}
-              >
-                <Truck className="mr-1 h-3 w-3" />
-                Dispatch
-              </Button>
+              canDispatch ? (
+                <Button
+                  size="sm"
+                  variant="default"
+                  className="text-xs h-7"
+                  onClick={() => handleDispatch(req.bin.id)}
+                >
+                  <Truck className="mr-1 h-3 w-3" />
+                  Dispatch
+                </Button>
+              ) : (
+                <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                  Pending
+                </Badge>
+              )
             ) : (
               <Badge className="bg-success/10 text-success border-success/30 text-[10px]">
                 <Truck className="mr-1 h-3 w-3" />

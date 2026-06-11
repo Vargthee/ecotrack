@@ -1,8 +1,9 @@
 import { useState, useCallback } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Users, Truck, CreditCard, Trash2, BarChart3, Shield,
+  Users, Truck, CreditCard, Trash2, Shield,
   Ban, CheckCircle, AlertTriangle, Star, MapPin, XCircle,
-  TrendingUp, Activity, Banknote
+  TrendingUp, Activity, Banknote, FileCheck, Clock, Car, Route, UserCheck
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import {
@@ -66,13 +68,111 @@ const revenueData = [
   { month: "Mar", revenue: 487500 },
 ];
 
+interface KycEntry {
+  id: number;
+  driverId: number;
+  driverName: string;
+  driverEmail: string;
+  status: "pending" | "approved" | "rejected";
+  govtIdType?: string;
+  vehicleMake?: string;
+  vehicleModel?: string;
+  vehicleYear?: string;
+  vehiclePlate?: string;
+  rejectionReason?: string;
+  submittedAt?: string;
+}
+
 const AdminPage = () => {
   const { user } = useAuth();
+  const qc = useQueryClient();
   const [users, setUsers] = useState(adminUsers);
   const [bins, setBins] = useState(wasteBins);
   const [reports, setReports] = useState(citizenReports);
   const [drivers, setDrivers] = useState(adminDrivers);
   const [subs] = useState(subscribers);
+  const [rejectReason, setRejectReason] = useState<Record<number, string>>({});
+
+  const { data: kycList = [], isLoading: kycLoading } = useQuery<KycEntry[]>({
+    queryKey: ["/api/admin/kyc"],
+    queryFn: async () => {
+      const r = await fetch("/api/admin/kyc", { credentials: "include" });
+      if (!r.ok) throw new Error("Failed to load KYC list");
+      const d = await r.json();
+      return Array.isArray(d) ? d : [];
+    },
+  });
+
+  interface PickupEntry {
+    id: number; userId: number; wasteType: string; status: string;
+    driverId?: number; address?: string; notes?: string; createdAt: string;
+  }
+  interface AdminUserEntry { id: number; name: string; email: string; role: string; }
+
+  const { data: allPickups = [], isLoading: pickupsLoading } = useQuery<PickupEntry[]>({
+    queryKey: ["/api/pickups"],
+    queryFn: async () => {
+      const r = await fetch("/api/pickups", { credentials: "include" });
+      if (!r.ok) throw new Error("Failed to load pickups");
+      const d = await r.json();
+      return Array.isArray(d) ? d : [];
+    },
+  });
+
+  const { data: allAdminUsers = [] } = useQuery<AdminUserEntry[]>({
+    queryKey: ["/api/admin/users"],
+    queryFn: async () => {
+      const r = await fetch("/api/admin/users", { credentials: "include" });
+      if (!r.ok) throw new Error("Failed to load users");
+      const d = await r.json();
+      return Array.isArray(d) ? d : [];
+    },
+  });
+
+  const driverList = Array.isArray(allAdminUsers) ? allAdminUsers.filter((u) => u.role === "driver") : [];
+  const [assignDriverMap, setAssignDriverMap] = useState<Record<number, string>>({});
+
+  const assignMutation = useMutation({
+    mutationFn: ({ pickupId, driverId }: { pickupId: number; driverId: number }) =>
+      fetch(`/api/pickups/${pickupId}/assign`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ driverId }),
+      }).then((r) => r.json()),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ["/api/pickups"] });
+      toast.success(`Pickup #${vars.pickupId} assigned to driver`);
+    },
+  });
+
+  const unassignMutation = useMutation({
+    mutationFn: (pickupId: number) =>
+      fetch(`/api/pickups/${pickupId}/unassign`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      }).then((r) => r.json()),
+    onSuccess: (_, pickupId) => {
+      qc.invalidateQueries({ queryKey: ["/api/pickups"] });
+      toast.success(`Pickup #${pickupId} unassigned`);
+    },
+  });
+
+  const kycMutation = useMutation({
+    mutationFn: ({ driverId, status, rejectionReason }: { driverId: number; status: "approved" | "rejected"; rejectionReason?: string }) =>
+      fetch(`/api/admin/kyc/${driverId}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, rejectionReason }),
+      }).then((r) => r.json()),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/kyc"] });
+      toast.success(`KYC ${vars.status === "approved" ? "approved" : "rejected"} successfully`);
+    },
+  });
 
   const handleUserAction = useCallback((userId: string, action: "activate" | "suspend" | "ban") => {
     const statusMap = { activate: "active", suspend: "suspended", ban: "banned" } as const;
@@ -240,21 +340,37 @@ const AdminPage = () => {
 
       {/* Management Tabs */}
       <Tabs defaultValue="users" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5 h-auto">
-          <TabsTrigger value="users" className="text-xs md:text-sm">
-            <Users className="h-3.5 w-3.5 mr-1.5 hidden md:inline" />Users
+        <TabsList className="grid w-full grid-cols-7 h-auto">
+          <TabsTrigger value="users" className="text-xs">
+            <Users className="h-3.5 w-3.5 mr-1 hidden md:inline" />Users
           </TabsTrigger>
-          <TabsTrigger value="bins" className="text-xs md:text-sm">
-            <Trash2 className="h-3.5 w-3.5 mr-1.5 hidden md:inline" />Bins
+          <TabsTrigger value="bins" className="text-xs">
+            <Trash2 className="h-3.5 w-3.5 mr-1 hidden md:inline" />Bins
           </TabsTrigger>
-          <TabsTrigger value="drivers" className="text-xs md:text-sm">
-            <Truck className="h-3.5 w-3.5 mr-1.5 hidden md:inline" />Drivers
+          <TabsTrigger value="drivers" className="text-xs">
+            <Truck className="h-3.5 w-3.5 mr-1 hidden md:inline" />Drivers
           </TabsTrigger>
-          <TabsTrigger value="reports" className="text-xs md:text-sm">
-            <AlertTriangle className="h-3.5 w-3.5 mr-1.5 hidden md:inline" />Reports
+          <TabsTrigger value="routes" className="text-xs relative">
+            <Route className="h-3.5 w-3.5 mr-1 hidden md:inline" />Routes
+            {allPickups.filter((p) => p.status === "pending" && !p.driverId).length > 0 && (
+              <span className="ml-1 h-4 w-4 rounded-full bg-destructive text-white text-[10px] flex items-center justify-center font-bold">
+                {allPickups.filter((p) => p.status === "pending" && !p.driverId).length}
+              </span>
+            )}
           </TabsTrigger>
-          <TabsTrigger value="subscribers" className="text-xs md:text-sm">
-            <CreditCard className="h-3.5 w-3.5 mr-1.5 hidden md:inline" />Subs
+          <TabsTrigger value="reports" className="text-xs">
+            <AlertTriangle className="h-3.5 w-3.5 mr-1 hidden md:inline" />Reports
+          </TabsTrigger>
+          <TabsTrigger value="subscribers" className="text-xs">
+            <CreditCard className="h-3.5 w-3.5 mr-1 hidden md:inline" />Subs
+          </TabsTrigger>
+          <TabsTrigger value="kyc" className="text-xs">
+            <FileCheck className="h-3.5 w-3.5 mr-1 hidden md:inline" />KYC
+            {kycList.filter((k) => k.status === "pending").length > 0 && (
+              <span className="ml-1 h-4 w-4 rounded-full bg-warning text-warning-foreground text-[10px] flex items-center justify-center font-bold">
+                {kycList.filter((k) => k.status === "pending").length}
+              </span>
+            )}
           </TabsTrigger>
         </TabsList>
 
@@ -455,6 +571,132 @@ const AdminPage = () => {
           </Card>
         </TabsContent>
 
+        {/* Routes / Pickup Assignment Tab */}
+        <TabsContent value="routes">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg">Route & Pickup Assignment</CardTitle>
+                  <CardDescription>Assign pending pickup requests to available drivers</CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/30">
+                    {allPickups.filter((p) => !p.driverId && p.status === "pending").length} unassigned
+                  </Badge>
+                  <Badge variant="outline" className="bg-success/15 text-success border-success/30">
+                    {allPickups.filter((p) => p.status === "completed").length} completed
+                  </Badge>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              {pickupsLoading ? (
+                <p className="text-sm text-muted-foreground text-center py-8">Loading pickups…</p>
+              ) : allPickups.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">No pickup requests yet.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>#</TableHead>
+                      <TableHead>Waste Type</TableHead>
+                      <TableHead>Address</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Assigned Driver</TableHead>
+                      <TableHead>Requested</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {allPickups.map((pickup) => {
+                      const assignedDriver = driverList.find((d) => d.id === pickup.driverId);
+                      const wasteLabel: Record<string, string> = { general: "🗑️ General", recycling: "♻️ Recycling", organic: "🌿 Organic", ewaste: "⚡ E-Waste" };
+                      const statusColor: Record<string, string> = {
+                        pending: "bg-muted text-muted-foreground",
+                        assigned: "bg-warning/15 text-warning border-warning/30",
+                        in_progress: "bg-primary/15 text-primary border-primary/30",
+                        completed: "bg-success/15 text-success border-success/30",
+                        cancelled: "bg-destructive/15 text-destructive border-destructive/30",
+                      };
+                      return (
+                        <TableRow key={pickup.id}>
+                          <TableCell className="font-mono text-xs">#{pickup.id}</TableCell>
+                          <TableCell className="text-sm">{wasteLabel[pickup.wasteType] ?? pickup.wasteType}</TableCell>
+                          <TableCell className="text-sm max-w-[140px] truncate text-muted-foreground">
+                            {pickup.address ?? <span className="italic text-muted-foreground/50">No address</span>}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={`text-[10px] capitalize ${statusColor[pickup.status] ?? ""}`}>
+                              {pickup.status.replace("_", " ")}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {assignedDriver ? (
+                              <div className="flex items-center gap-1.5 text-sm">
+                                <UserCheck className="h-3.5 w-3.5 text-success" />
+                                <span>{assignedDriver.name}</span>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground italic">Unassigned</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-xs">
+                            {new Date(pickup.createdAt).toLocaleDateString("en-NG", { month: "short", day: "numeric" })}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {(pickup.status === "pending" || pickup.status === "assigned") ? (
+                              <div className="flex items-center gap-2 justify-end">
+                                <Select
+                                  value={assignDriverMap[pickup.id] ?? (pickup.driverId ? String(pickup.driverId) : "")}
+                                  onValueChange={(v) => setAssignDriverMap((prev) => ({ ...prev, [pickup.id]: v }))}
+                                >
+                                  <SelectTrigger className="w-36 h-7 text-xs">
+                                    <SelectValue placeholder="Select driver" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {driverList.map((d) => (
+                                      <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                  disabled={!assignDriverMap[pickup.id] || assignMutation.isPending}
+                                  onClick={() => {
+                                    const dId = assignDriverMap[pickup.id];
+                                    if (dId) assignMutation.mutate({ pickupId: pickup.id, driverId: Number(dId) });
+                                  }}
+                                >
+                                  <Route className="h-3 w-3 mr-1" /> Assign
+                                </Button>
+                                {pickup.driverId && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 text-xs text-destructive hover:text-destructive"
+                                    onClick={() => unassignMutation.mutate(pickup.id)}
+                                    disabled={unassignMutation.isPending}
+                                  >
+                                    <XCircle className="h-3 w-3" />
+                                  </Button>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* Reports Tab */}
         <TabsContent value="reports">
           <Card>
@@ -556,6 +798,118 @@ const AdminPage = () => {
                   ))}
                 </TableBody>
               </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* KYC Verification Tab */}
+        <TabsContent value="kyc">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg">Driver KYC Verification</CardTitle>
+                  <CardDescription>Review and approve driver identity & vehicle documents</CardDescription>
+                </div>
+                <div className="flex gap-2 text-sm text-muted-foreground">
+                  <Badge variant="outline" className="bg-warning/15 text-warning border-warning/30">
+                    {kycList.filter((k) => k.status === "pending").length} pending
+                  </Badge>
+                  <Badge variant="outline" className="bg-success/15 text-success border-success/30">
+                    {kycList.filter((k) => k.status === "approved").length} approved
+                  </Badge>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              {kycLoading ? (
+                <p className="text-sm text-muted-foreground text-center py-8">Loading KYC submissions…</p>
+              ) : kycList.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">No KYC submissions yet.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Driver</TableHead>
+                      <TableHead>ID Type</TableHead>
+                      <TableHead>Vehicle</TableHead>
+                      <TableHead>Plate</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Submitted</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {kycList.map((k) => (
+                      <TableRow key={k.id}>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{k.driverName}</p>
+                            <p className="text-xs text-muted-foreground">{k.driverEmail}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm capitalize">{k.govtIdType?.replace("_", " ") ?? "—"}</TableCell>
+                        <TableCell>
+                          {k.vehicleMake ? (
+                            <div className="flex items-center gap-1.5 text-sm">
+                              <Car className="h-3.5 w-3.5 text-muted-foreground" />
+                              {k.vehicleMake} {k.vehicleModel} ({k.vehicleYear})
+                            </div>
+                          ) : "—"}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{k.vehiclePlate ?? "—"}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={
+                            k.status === "approved" ? "bg-success/15 text-success border-success/30"
+                            : k.status === "rejected" ? "bg-destructive/15 text-destructive border-destructive/30"
+                            : "bg-warning/15 text-warning border-warning/30"
+                          }>
+                            {k.status === "pending" ? <Clock className="h-3 w-3 mr-1 inline" /> : k.status === "approved" ? <CheckCircle className="h-3 w-3 mr-1 inline" /> : <XCircle className="h-3 w-3 mr-1 inline" />}
+                            {k.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {k.submittedAt ? new Date(k.submittedAt).toLocaleDateString() : "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {k.status === "pending" ? (
+                            <div className="flex items-center gap-2 justify-end">
+                              <Input
+                                placeholder="Rejection reason (optional)"
+                                className="h-7 text-xs w-44"
+                                value={rejectReason[k.driverId] ?? ""}
+                                onChange={(e) => setRejectReason((prev) => ({ ...prev, [k.driverId]: e.target.value }))}
+                              />
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-success border-success/30 hover:bg-success/10"
+                                onClick={() => kycMutation.mutate({ driverId: k.driverId, status: "approved" })}
+                                disabled={kycMutation.isPending}
+                              >
+                                <CheckCircle className="h-3.5 w-3.5 mr-1" /> Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-destructive border-destructive/30 hover:bg-destructive/10"
+                                onClick={() => kycMutation.mutate({ driverId: k.driverId, status: "rejected", rejectionReason: rejectReason[k.driverId] })}
+                                disabled={kycMutation.isPending}
+                              >
+                                <XCircle className="h-3.5 w-3.5 mr-1" /> Reject
+                              </Button>
+                            </div>
+                          ) : k.status === "rejected" && k.rejectionReason ? (
+                            <span className="text-xs text-muted-foreground italic">{k.rejectionReason}</span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

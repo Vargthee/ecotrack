@@ -12,6 +12,8 @@ export async function setupVite(app: Express) {
     server: {
       middlewareMode: true,
       hmr: { overlay: false },
+      host: "0.0.0.0",
+      allowedHosts: true,
     },
     appType: "spa",
   });

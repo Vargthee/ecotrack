@@ -2,6 +2,7 @@ import { memo, useEffect } from "react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Outlet, useLocation } from "react-router-dom";
+import { NotificationBell } from "@/components/NotificationBell";
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -30,7 +31,8 @@ export const AppLayout = memo(function AppLayout() {
         <div className="flex-1 flex flex-col min-w-0">
           <header className="h-14 flex items-center border-b bg-card px-4 shrink-0 shadow-sm">
             <SidebarTrigger className="mr-3 transition-transform active:scale-90" />
-            <span className="text-sm font-medium text-muted-foreground truncate">EcoTrack Waste Management</span>
+            <span className="text-sm font-medium text-muted-foreground truncate flex-1">EcoTrack Waste Management</span>
+            <NotificationBell />
           </header>
           <main
             id="main-content"
